@@ -15,6 +15,19 @@ const ActiveSkillSchema = z.object({
   version: z.string().optional(),
 });
 
+export const StageToolDefSchema = z.object({
+  name: z.string(),
+  href: z.string(),
+  description: z.string().optional(),
+  expects: z.record(z.string()).optional(),
+});
+
+export const StageResourceDefSchema = z.object({
+  uri: z.string(),
+  name: z.string().optional(),
+  mime_type: z.string().optional(),
+});
+
 export const StateFrameSchema = z.object({
   run_id: z.string(),
   workflow_id: z.string(),
@@ -24,6 +37,8 @@ export const StateFrameSchema = z.object({
   next_states: z.array(NextStateSchema),
   resource_url: z.string().optional(),
   active_skill: ActiveSkillSchema.optional(),
+  tools: z.array(StageToolDefSchema).optional(),
+  resources: z.array(StageResourceDefSchema).optional(),
   data: z.record(z.unknown()).optional(),
   milestones: z.array(z.string()).optional(),
   stream_url: z.string().optional(),
@@ -32,6 +47,8 @@ export const StateFrameSchema = z.object({
 
 export type NextState = z.infer<typeof NextStateSchema>;
 export type ActiveSkill = z.infer<typeof ActiveSkillSchema>;
+export type StageToolDef = z.infer<typeof StageToolDefSchema>;
+export type StageResourceDef = z.infer<typeof StageResourceDefSchema>;
 export type StateFrame = z.infer<typeof StateFrameSchema>;
 
 export const TransitionDefSchema = z.object({

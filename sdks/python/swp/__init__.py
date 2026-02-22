@@ -9,6 +9,8 @@ from swp.models import (
     NextState,
     ActiveSkill,
     TransitionDef,
+    StageToolDef,
+    StageResourceDef,
 )
 from swp.server import create_app, SWPWorkflow
 from swp.client import SWPClient
@@ -20,6 +22,8 @@ __all__ = [
     "NextState",
     "ActiveSkill",
     "TransitionDef",
+    "StageToolDef",
+    "StageResourceDef",
     "create_app",
     "SWPWorkflow",
     "SWPClient",

@@ -80,6 +80,33 @@
       "format": "uri",
       "description": "Endpoint for Streamable HTTP (NDJSON). GET with Accept: application/x-ndjson to receive state updates."
     },
+    "tools": {
+      "type": "array",
+      "description": "Stage-bound tools callable in this state. Agent POSTs to href to invoke.",
+      "items": {
+        "type": "object",
+        "required": ["name", "href"],
+        "properties": {
+          "name": { "type": "string", "description": "Tool identifier; used in invoke URL path." },
+          "href": { "type": "string", "format": "uri", "description": "URL to POST to invoke this tool." },
+          "description": { "type": "string", "description": "Short description for the LLM." },
+          "expects": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Minimal input schema for the LLM." }
+        }
+      }
+    },
+    "resources": {
+      "type": "array",
+      "description": "Stage-bound resources readable in this state. Agent GETs uri.",
+      "items": {
+        "type": "object",
+        "required": ["uri"],
+        "properties": {
+          "uri": { "type": "string", "format": "uri", "description": "URL to GET to read this resource." },
+          "name": { "type": "string", "description": "Human-readable label." },
+          "mime_type": { "type": "string", "description": "Hint for client (e.g. text/markdown, application/json)." }
+        }
+      }
+    },
     "_links": {
       "type": "object",
       "description": "HATEOAS links (e.g. all_options for full transition list).",

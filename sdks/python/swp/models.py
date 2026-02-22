@@ -22,6 +22,21 @@ class NextState(BaseModel):
     is_critical: bool = False
 
 
+class StageToolDef(BaseModel):
+    """Stage-bound tool: callable by the agent in this state."""
+    name: str
+    href: str
+    description: Optional[str] = None
+    expects: Optional[dict[str, str]] = None
+
+
+class StageResourceDef(BaseModel):
+    """Stage-bound resource: readable by the agent in this state."""
+    uri: str
+    name: Optional[str] = None
+    mime_type: Optional[str] = None
+
+
 class StateFrame(BaseModel):
     """SWP State Frame - single source of truth for the agent."""
     run_id: str
@@ -32,6 +47,8 @@ class StateFrame(BaseModel):
     next_states: list[NextState]
     resource_url: Optional[str] = None
     active_skill: Optional[ActiveSkill] = None
+    tools: Optional[list[StageToolDef]] = None
+    resources: Optional[list[StageResourceDef]] = None
     data: Optional[dict[str, Any]] = None
     milestones: Optional[list[str]] = None
     stream_url: Optional[str] = None

@@ -25,3 +25,6 @@ dist/
 # Env
 .env
 .env.local
+
+# Local run / CLI
+.clrun/

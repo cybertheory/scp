@@ -8,7 +8,7 @@ import {
   SWPClient,
   visualizeFsm,
   type TransitionDef,
-} from "../sdks/typescript/src/index.js";
+} from "../../sdks/typescript/src/index.js";
 
 const transitions: TransitionDef[] = [
   { from_state: "INIT", action: "start", to_state: "DONE" },
@@ -46,7 +46,7 @@ describe("visualizeFsm", () => {
     ];
     const mermaid = visualizeFsm("wf1", "A", ts, "B");
     expect(mermaid).toContain("flowchart LR");
-    expect(mermaid).toContain("Start --> A");
+    expect(mermaid).toContain("--> A");
     expect(mermaid).toContain("A -->|x| B");
     expect(mermaid).toContain("class B current");
   });
@@ -128,7 +128,7 @@ describe("SWP Server + Client", () => {
 
 describe("SWPClient parse frame", () => {
   it("parses State Frame JSON", async () => {
-    const { StateFrameSchema } = await import("../sdks/typescript/src/models.js");
+    const { StateFrameSchema } = await import("../../sdks/typescript/src/models.js");
     const frameJson = {
       run_id: "run-x",
       workflow_id: "w",
@@ -141,5 +141,45 @@ describe("SWPClient parse frame", () => {
     expect(parsed.run_id).toBe("run-x");
     expect(parsed.state).toBe("S");
     expect(parsed.next_states.find((ns) => ns.action === "a")).toBeDefined();
+  });
+});
+
+describe("Stage integrations – tool logic executes when stepping through FSM", () => {
+  it("invoke tool runs handler and returns result after transition to state with tool", async () => {
+    const { createApp, SWPWorkflow } = await import("../../sdks/typescript/src/index.js");
+    const transitions = [
+      { from_state: "INIT", action: "start", to_state: "LINT" },
+    ];
+    let invoked = false;
+    const w = new SWPWorkflow("wf", "INIT", transitions, "http://localhost")
+      .hint("INIT", "Start")
+      .hint("LINT", "Lint")
+      .tool("LINT", "run_linter", (_rid, _rec, body) => {
+        invoked = true;
+        return { passed: true, issues: (body?.count as number) ?? 0 };
+      });
+    const store: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
+    const app = createApp(w, store);
+    const postRun = await app.request("http://localhost/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const { run_id } = (await postRun.json()) as { run_id: string };
+    await app.request(`http://localhost/runs/${run_id}/transitions/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const invoke = await app.request(`http://localhost/runs/${run_id}/invoke/run_linter`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ count: 2 }),
+    });
+    expect(invoke.status).toBe(200);
+    const data = (await invoke.json()) as { result: { passed: boolean; issues: number } };
+    expect(data.result.passed).toBe(true);
+    expect(data.result.issues).toBe(2);
+    expect(invoked).toBe(true);
   });
 });

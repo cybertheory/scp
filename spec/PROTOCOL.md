@@ -6,6 +6,7 @@ SWP is a lean, agent-native protocol over HTTP. It replaces the "static tool men
 
 - **Transport**: Standard HTTP/HTTPS. No custom protocol; works with curl and any HTTP client.
 - **Format**: JSON. State Frames conform to `STATE_FRAME.json` schema.
+- **OpenAPI**: A single OpenAPI 3.0 spec describes the SWP API. Servers SHOULD serve it at `GET /openapi.json` (canonical source: `spec/openapi.json`).
 - **Async**: Streamable HTTP (NDJSON) on a single endpoint for push-based state updates.
 - **Resumption**: `Mcp-Session-Id` and `Last-Event-ID` (or equivalent) for re-attaching after disconnect.
 
@@ -49,6 +50,8 @@ The server MUST reject any transition not listed in `next_states` for the curren
 
 This allows an agent to discover and start workflows without prior documentation.
 
+**Non-idempotent GET /:** Implementations that use `GET /` to return an initial State Frame often create a new run (new `run_id`) as a side effect. In that case, `GET /` is **not idempotent**—repeating the request creates another run. Clients and caches should not assume `GET /` is safe to repeat without creating a new run.
+
 ### 3.2 Start Run
 
 - **Request**: `POST /` or `POST /runs` with optional body (workflow_id, initial data).
@@ -66,6 +69,7 @@ Used for polling or after reconnection to refresh state.
 ### 3.4 Transition (Trigger Next State)
 
 - **Request**: `POST <href>` where `href` is one of the current frame’s `next_states[].href`. Body must satisfy the corresponding `expects` schema.
+- **Run data**: Servers SHOULD merge only the keys defined in the transition’s `expects` into the run’s `data` (not the entire body), so run context stays predictable and arbitrary payload is not stored.
 - **Response**:
   - **200 OK**: Transition applied; body = new State Frame.
   - **202 Accepted**: Transition accepted; long-running work started. Body = State Frame with `status: processing`. Connection MAY be kept open and switched to NDJSON stream (Unified Endpoint).
@@ -94,9 +98,26 @@ The server should persist State Frames (e.g. in Redis or Postgres) keyed by `run
 - `GET /runs/{run_id}` always returns the latest frame.
 - Reconnecting to `stream_url` with the same session id allows the client to continue receiving updates.
 
+### 4.1 Store contract
+
+Run state is stored under a **run-scoped key**. The contract is:
+
+- **Key**: `run_id` (string).
+- **Value**: An object with at least `state` (string), and optionally `data` (object) and `milestones` (array of strings). SDKs may extend this (e.g. timestamps).
+
+Servers may use an **in-memory** store (e.g. `Record<run_id, value>`) or a **persistent** store (e.g. Redis, Postgres). The protocol does not mandate a specific backend; SDKs that accept a store abstraction (e.g. `get(runId)`, `set(runId, record)`) allow plugging in either.
+
 ---
 
-## 5. Agent Skills Integration
+## 5. OpenAPI
+
+- The canonical OpenAPI 3.0 specification for SWP is **`spec/openapi.json`** in this repository.
+- SWP servers SHOULD expose `GET /openapi.json` returning this spec with `servers[].url` set to the server’s base URL.
+- The spec defines paths for discovery, start run, get frame, transition, stream, and visualize; and the **StateFrame** schema in `components.schemas`. Clients and code generators can use it as the single description of the API.
+
+---
+
+## 6. Agent Skills Integration
 
 - When a State Frame includes `active_skill`, the client should:
   1. Fetch the skill from `active_skill.url` (e.g. SKILL.md).
@@ -105,15 +126,16 @@ The server should persist State Frames (e.g. in Redis or Postgres) keyed by `run
 
 ---
 
-## 6. Conventions
+## 8. Conventions
 
+- **Error body**: For **400**, **403**, and **404** responses, the body MUST be a JSON object with a top-level **`hint`** string (e.g. `{"hint": "Run not found"}`). Clients can parse one shape across all SWP servers.
 - **Token efficiency**: Frames should be minimal. Avoid redundant keys; use short names where the schema allows.
 - **Hints**: Always provide a clear, actionable `hint` so the agent can reason without guessing.
 - **Guards**: Enforce business rules on the server; return clear reasons in the body when a transition is rejected.
 
 ---
 
-## 7. Versioning
+## 9. Versioning
 
 - The State Frame schema may include a `state_machine.version` or similar field.
 - Servers can use `workflow_id` to version workflows (e.g. `document-approval-v2`).

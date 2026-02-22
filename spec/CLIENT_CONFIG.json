@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://swp.dev/schemas/CLIENT_CONFIG.json",
+  "title": "SWP Client Discovery Config",
+  "description": "JSON config for client discovery of SWP servers (like MCP). Local FSMs are supplied programmatically, not in this config.",
+  "type": "object",
+  "properties": {
+    "servers": {
+      "type": "array",
+      "description": "List of SWP servers the client can connect to.",
+      "items": {
+        "type": "object",
+        "required": ["base_url"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Optional id for this server (e.g. 'legal-review'). Defaults to base_url if omitted."
+          },
+          "base_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Base URL of the SWP server (e.g. https://api.example.com/swp)."
+          }
+        }
+      }
+    }
+  }
+}

@@ -4,17 +4,79 @@ from __future__ import annotations
 import json
 import uuid
 import asyncio
-from typing import Any, Callable, Optional
+import inspect
+from importlib.resources import files as _pkg_files
+from typing import Any, AsyncIterator, Callable, Optional, Union
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
-from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
+from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, Response
 from pydantic import BaseModel
 
-from .models import StateFrame, NextState, ActiveSkill, TransitionDef
+from .models import StateFrame, NextState, ActiveSkill, TransitionDef, StageToolDef, StageResourceDef
 from .visualize import visualize_fsm
+from .store import Store, InMemoryStore, RunRecord
+
+
+REDIS_STREAM_CHANNEL_PREFIX = "swp:stream:"
 
 
 def _ndjson_line(obj: dict) -> bytes:
     return (json.dumps(obj) + "\n").encode("utf-8")
+
+
+def _redis_stream_store(inner: Store, redis_url: str, workflow: "SWPWorkflow") -> Store:
+    """Wrap a store to publish State Frames to Redis on every set(), for GET /stream subscribers."""
+    try:
+        import redis
+    except ImportError:
+        raise ImportError("Redis streaming requires the 'redis' package. pip install swp-sdk[redis] or pip install redis")
+    client = redis.from_url(redis_url, decode_responses=False)
+
+    class _Wrapper(Store):
+        def get(self, run_id: str) -> Optional[RunRecord]:
+            return inner.get(run_id)
+
+        def set(self, run_id: str, record: RunRecord) -> None:
+            inner.set(run_id, record)
+            frame = workflow.build_frame(
+                run_id,
+                record["state"],
+                data=record.get("data"),
+                milestones=record.get("milestones"),
+            )
+            payload = json.dumps({"id": run_id, **frame.model_dump(by_alias=True, exclude_none=True)})
+            client.publish(REDIS_STREAM_CHANNEL_PREFIX + run_id, payload)
+
+    return _Wrapper()
+
+
+async def _redis_stream_provider(
+    run_id: str, last_event_id: str, get_run: Callable[[str], RunRecord], workflow: "SWPWorkflow", redis_url: str
+) -> AsyncIterator[dict]:
+    """Async generator: yield current frame, then yield each message from Redis pub/sub for this run."""
+    try:
+        from redis.asyncio import Redis
+    except ImportError:
+        raise ImportError("Redis streaming requires the 'redis' package. pip install swp-sdk[redis] or pip install redis")
+    r = get_run(run_id)
+    frame = workflow.build_frame(
+        run_id, r["state"], data=r.get("data"), milestones=r.get("milestones")
+    )
+    yield {"id": "0", **frame.model_dump(by_alias=True, exclude_none=True)}
+    channel = REDIS_STREAM_CHANNEL_PREFIX + run_id
+    redis_client = Redis.from_url(redis_url, decode_responses=True)
+    try:
+        pubsub = redis_client.pubsub()
+        await pubsub.subscribe(channel)
+        async for message in pubsub.listen():
+            if message.get("type") == "message" and isinstance(message.get("data"), str):
+                try:
+                    obj = json.loads(message["data"])
+                    if isinstance(obj, dict):
+                        yield obj
+                except json.JSONDecodeError:
+                    pass
+    finally:
+        await redis_client.aclose()
 
 
 class SWPWorkflow:
@@ -36,6 +98,8 @@ class SWPWorkflow:
         self._state_hints: dict[str, str] = {}
         self._state_skills: dict[str, ActiveSkill] = {}
         self._state_status: dict[str, str] = {}
+        self._state_tools: dict[str, dict[str, dict[str, Any]]] = {}  # state -> name -> {handler, description?, expects?}
+        self._state_resources: dict[str, dict[str, dict[str, Any]]] = {}  # state -> path -> {handler, name?, mime_type?}
 
     def hint(self, state: str, text: str) -> "SWPWorkflow":
         self._state_hints[state] = text
@@ -48,6 +112,38 @@ class SWPWorkflow:
 
     def status_default(self, state: str, status: str) -> "SWPWorkflow":
         self._state_status[state] = status
+        return self
+
+    def tool(
+        self,
+        state: str,
+        name: str,
+        handler: Callable[..., Any],
+        description: Optional[str] = None,
+        expects: Optional[dict[str, str]] = None,
+    ) -> "SWPWorkflow":
+        """Register a stage-bound tool. Handler(run_id, run_record, body) -> dict."""
+        self._state_tools.setdefault(state, {})[name] = {
+            "handler": handler,
+            "description": description,
+            "expects": expects,
+        }
+        return self
+
+    def resource(
+        self,
+        state: str,
+        path: str,
+        handler: Callable[..., Any],
+        name: Optional[str] = None,
+        mime_type: Optional[str] = None,
+    ) -> "SWPWorkflow":
+        """Register a stage-bound resource. Handler(run_id, run_record) -> bytes | str | dict."""
+        self._state_resources.setdefault(state, {})[path] = {
+            "handler": handler,
+            "name": name,
+            "mime_type": mime_type,
+        }
         return self
 
     def _next_states(self, from_state: str, run_id: str) -> list[NextState]:
@@ -78,6 +174,29 @@ class SWPWorkflow:
     ) -> StateFrame:
         status = status or self._state_status.get(state, "active")
         stream_url = f"{self.base_url}/runs/{run_id}/stream" if stream_path is None else f"{self.base_url}{stream_path}"
+        tools_list: Optional[list[StageToolDef]] = None
+        state_tools = self._state_tools.get(state, {})
+        if state_tools:
+            tools_list = [
+                StageToolDef(
+                    name=name,
+                    href=f"{self.base_url}/runs/{run_id}/invoke/{name}",
+                    description=info.get("description"),
+                    expects=info.get("expects"),
+                )
+                for name, info in state_tools.items()
+            ]
+        resources_list: Optional[list[StageResourceDef]] = None
+        state_resources = self._state_resources.get(state, {})
+        if state_resources:
+            resources_list = [
+                StageResourceDef(
+                    uri=f"{self.base_url}/runs/{run_id}/resources/{path}",
+                    name=info.get("name"),
+                    mime_type=info.get("mime_type"),
+                )
+                for path, info in state_resources.items()
+            ]
         return StateFrame(
             run_id=run_id,
             workflow_id=self.workflow_id,
@@ -87,6 +206,8 @@ class SWPWorkflow:
             hint=self._state_hints.get(state, "Proceed."),
             active_skill=self._state_skills.get(state),
             next_states=self._next_states(state, run_id),
+            tools=tools_list,
+            resources=resources_list,
             data=data or {},
             milestones=milestones,
             stream_url=stream_url,
@@ -101,48 +222,88 @@ class SWPWorkflow:
 
 def create_app(
     workflow: SWPWorkflow,
-    store: Optional[dict[str, Any]] = None,
+    store: Optional[Union[Store, dict[str, Any]]] = None,
     stream_callback: Optional[Callable[[str, StateFrame], None]] = None,
+    stream_provider: Optional[Callable[[str, str], AsyncIterator[dict]]] = None,
+    redis_url: Optional[str] = None,
 ) -> FastAPI:
-    """Create FastAPI app with SWP routes. store keys: run_id -> { state, data, milestones }."""
-    app = FastAPI(title="SWP Server", version="0.1.0")
-    store = store or {}
-    stream_callback = stream_callback or (lambda run_id, frame: None)
+    """Create FastAPI app with SWP routes.
 
-    def get_run(run_id: str) -> dict:
-        if run_id not in store:
+    - store: Store implementation, dict (in-memory), or None.
+    - stream_callback: Called when a 202 NDJSON response is sent after a transition.
+    - stream_provider: Optional async generator (run_id, last_event_id) -> yields frame dicts for GET /runs/{run_id}/stream.
+      If None (and redis_url is not set), the default dev implementation is used (simple polling loop).
+    - redis_url: If set, enables first-class Redis streaming: every store update is published to Redis, and GET /stream
+      subscribes to the run's channel. Requires: pip install swp-sdk[redis]
+    """
+    app = FastAPI(title="SWP Server", version="0.1.0")
+    if store is None:
+        _store: Store = InMemoryStore()
+    elif isinstance(store, dict):
+        _store = InMemoryStore(store)
+    else:
+        _store = store
+    stream_callback = stream_callback or (lambda run_id, frame: None)
+    if redis_url:
+        _store = _redis_stream_store(_store, redis_url, workflow)
+        _stream_provider = lambda run_id, last_id: _redis_stream_provider(run_id, last_id, get_run, workflow, redis_url)
+    else:
+        _stream_provider = stream_provider
+
+    @app.exception_handler(HTTPException)
+    async def _unify_error_body(_request: Request, exc: HTTPException):
+        """Return 400/403/404 with body { \"hint\": \"...\" } for spec consistency (same as TypeScript)."""
+        if exc.status_code in (400, 403, 404):
+            body = exc.detail if isinstance(exc.detail, dict) and "hint" in exc.detail else {"hint": str(exc.detail)}
+            return JSONResponse(status_code=exc.status_code, content=body)
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+    # Load OpenAPI spec and set server URL to workflow base_url; override FastAPI's default schema
+    _openapi_path = _pkg_files(__package__ or "swp") / "openapi.json"
+    if _openapi_path.exists():
+        _openapi_spec = json.loads(_openapi_path.read_text())
+        _openapi_spec["servers"] = [{"url": workflow.base_url, "description": "SWP server"}]
+        _openapi_spec["info"]["x-workflow-id"] = workflow.workflow_id
+
+        def _custom_openapi():
+            return _openapi_spec
+        app.openapi = _custom_openapi
+    else:
+        _openapi_spec = None
+
+    def get_run(run_id: str) -> RunRecord:
+        r = _store.get(run_id)
+        if r is None:
             raise HTTPException(status_code=404, detail="Run not found")
-        return store[run_id]
+        return r
 
     @app.get("/")
     async def discover():
-        """Discovery: return a frame that allows starting a workflow."""
+        """Discovery: return a frame for a new run with all valid next_states (same as TypeScript)."""
         run_id = str(uuid.uuid4())
-        store[run_id] = {
+        record: RunRecord = {
             "state": workflow.initial_state,
             "data": {},
             "milestones": [],
         }
-        frame = workflow.build_frame(run_id, workflow.initial_state, data={}, milestones=[])
-        frame_dict = frame.model_dump(by_alias=True, exclude_none=True)
-        frame_dict["next_states"] = [
-            {
-                **ns.model_dump(),
-                "href": f"{workflow.base_url}/runs/{run_id}/transitions/start",
-            }
-        ]
-        return frame_dict
+        _store.set(run_id, record)
+        frame = workflow.build_frame(
+            run_id, workflow.initial_state,
+            data=record.get("data", {}), milestones=record.get("milestones", []),
+        )
+        return frame.model_dump(by_alias=True, exclude_none=True)
 
     @app.post("/runs")
     async def start_run(body: dict = {}):
         """Start a new run."""
         run_id = str(uuid.uuid4())
-        store[run_id] = {
+        record: RunRecord = {
             "state": workflow.initial_state,
             "data": body.get("data", {}),
             "milestones": [],
         }
-        frame = workflow.build_frame(run_id, workflow.initial_state, data=store[run_id]["data"], milestones=[])
+        _store.set(run_id, record)
+        frame = workflow.build_frame(run_id, workflow.initial_state, data=record["data"], milestones=[])
         return JSONResponse(
             status_code=201,
             content=frame.model_dump(by_alias=True, exclude_none=True),
@@ -188,10 +349,14 @@ def create_app(
                     status_code=400,
                     detail={"hint": f"Missing required field: {key} (expected {typ})."},
                 )
-        # Update state
+        # Update state; merge only expects keys into run data (stricter contract, no arbitrary payload)
         r["state"] = trans.to_state
-        if body:
-            r.setdefault("data", {}).update(body)
+        if expects:
+            data = r.setdefault("data", {})
+            for key in expects:
+                if key in body:
+                    data[key] = body[key]
+        _store.set(run_id, r)
         new_frame = workflow.build_frame(
             run_id,
             r["state"],
@@ -210,6 +375,7 @@ def create_app(
                 await asyncio.sleep(0.5)
                 r["state"] = trans.to_state
                 r["milestones"] = r.get("milestones", []) + [trans.to_state]
+                _store.set(run_id, r)
                 updated = workflow.build_frame(
                     run_id,
                     r["state"],
@@ -225,25 +391,68 @@ def create_app(
             )
         return frame_dict
 
+    @app.post("/runs/{run_id}/invoke/{tool_name}")
+    async def invoke_tool(run_id: str, tool_name: str, request: Request):
+        """Run the stage-bound tool handler. 403 if tool not available in current state."""
+        r = get_run(run_id)
+        current = r["state"]
+        state_tools = workflow._state_tools.get(current, {})
+        if tool_name not in state_tools:
+            raise HTTPException(
+                status_code=403,
+                detail={"hint": f"Tool '{tool_name}' not available in state '{current}'."},
+            )
+        info = state_tools[tool_name]
+        handler = info["handler"]
+        body = await request.json() if await request.body() else {}
+        try:
+            if inspect.iscoroutinefunction(handler):
+                result = await handler(run_id, r, body)
+            else:
+                result = await asyncio.to_thread(handler, run_id, r, body)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail={"hint": str(e)})
+        return {"result": result}
+
+    @app.get("/runs/{run_id}/resources/{path:path}")
+    async def read_resource(run_id: str, path: str):
+        """Return stage-bound resource content. 403 if resource not available in current state."""
+        r = get_run(run_id)
+        current = r["state"]
+        state_resources = workflow._state_resources.get(current, {})
+        if path not in state_resources:
+            raise HTTPException(
+                status_code=403,
+                detail={"hint": f"Resource '{path}' not available in state '{current}'."},
+            )
+        info = state_resources[path]
+        handler = info["handler"]
+        try:
+            if inspect.iscoroutinefunction(handler):
+                content = await handler(run_id, r)
+            else:
+                content = await asyncio.to_thread(handler, run_id, r)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail={"hint": str(e)})
+        if isinstance(content, dict):
+            return JSONResponse(content)
+        if isinstance(content, str):
+            content = content.encode("utf-8")
+        mime = info.get("mime_type") or "application/octet-stream"
+        return Response(content=content, media_type=mime)
+
     @app.get("/runs/{run_id}/stream")
     async def stream_updates(run_id: str, request: Request):
-        """Stream State Frame updates as NDJSON."""
+        """Stream State Frame updates as NDJSON. Uses stream_provider if given, else default dev loop."""
         get_run(run_id)
         last_id = request.headers.get("last-event-id") or request.headers.get("x-last-event-id", "")
 
-        async def event_stream():
-            # Send initial frame so client has state
-            r = get_run(run_id)
-            frame = workflow.build_frame(
-                run_id,
-                r["state"],
-                data=r.get("data"),
-                milestones=r.get("milestones"),
-            )
-            yield _ndjson_line({"id": "0", **frame.model_dump(by_alias=True, exclude_none=True)})
-            # In production, subscribe to a queue (Redis, etc.) for this run_id
-            for i in range(3):
-                await asyncio.sleep(0.3)
+        if _stream_provider is not None:
+            async def event_stream():
+                async for obj in _stream_provider(run_id, last_id):
+                    yield _ndjson_line(obj)
+        else:
+            async def event_stream():
                 r = get_run(run_id)
                 frame = workflow.build_frame(
                     run_id,
@@ -251,7 +460,17 @@ def create_app(
                     data=r.get("data"),
                     milestones=r.get("milestones"),
                 )
-                yield _ndjson_line({"id": str(i + 1), **frame.model_dump(by_alias=True, exclude_none=True)})
+                yield _ndjson_line({"id": "0", **frame.model_dump(by_alias=True, exclude_none=True)})
+                for i in range(3):
+                    await asyncio.sleep(0.3)
+                    r = get_run(run_id)
+                    frame = workflow.build_frame(
+                        run_id,
+                        r["state"],
+                        data=r.get("data"),
+                        milestones=r.get("milestones"),
+                    )
+                    yield _ndjson_line({"id": str(i + 1), **frame.model_dump(by_alias=True, exclude_none=True)})
 
         return StreamingResponse(
             event_stream(),
