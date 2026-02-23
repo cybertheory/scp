@@ -1,4 +1,4 @@
-"""Tests for SWP Python SDK: FSM, State Frame, client-server exchange, visualizer."""
+"""Tests for SCP Python SDK: FSM, State Frame, client-server exchange, visualizer."""
 import pytest
 import subprocess
 import sys
@@ -7,11 +7,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "sdks" / "python"))
 
-from swp.models import StateFrame, NextState, TransitionDef
-from swp.visualize import visualize_fsm
-from swp.server import SWPWorkflow, create_app
-from swp.client import SWPClient
+from scp.models import StateFrame, NextState, TransitionDef
+from scp.visualize import visualize_fsm
+from scp.server import SCPWorkflow, create_app
+from scp.client import SCPClient
 from fastapi.testclient import TestClient
+
+try:
+    from httpx import ASGITransport
+    HAS_ASGI_TRANSPORT = True
+except ImportError:
+    HAS_ASGI_TRANSPORT = False
 
 
 # --- Unit: FSM transition logic ---
@@ -27,7 +33,7 @@ def test_workflow_build_frame():
     transitions = [
         TransitionDef(from_state="INIT", action="start", to_state="NEXT"),
     ]
-    w = SWPWorkflow("wf1", "INIT", transitions, base_url="http://localhost:8000")
+    w = SCPWorkflow("wf1", "INIT", transitions, base_url="http://localhost:8000")
     w.hint("INIT", "Start here.")
     frame = w.build_frame("run-123", "INIT")
     assert frame.run_id == "run-123"
@@ -43,7 +49,7 @@ def test_workflow_get_transition():
         TransitionDef(from_state="A", action="x", to_state="B"),
         TransitionDef(from_state="A", action="y", to_state="C"),
     ]
-    w = SWPWorkflow("wf1", "A", transitions)
+    w = SCPWorkflow("wf1", "A", transitions)
     assert w.get_transition("A", "x").to_state == "B"
     assert w.get_transition("A", "y").to_state == "C"
     assert w.get_transition("A", "z") is None
@@ -87,7 +93,7 @@ def app_and_client():
     transitions = [
         TransitionDef(from_state="INIT", action="start", to_state="DONE"),
     ]
-    w = SWPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
+    w = SCPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
     store = {}
     app = create_app(w, store=store)
     client = TestClient(app)
@@ -153,11 +159,75 @@ def test_404_run_not_found_returns_hint(app_and_client):
     assert "not found" in data["hint"].lower()
 
 
+def test_get_cli_returns_200_auto_generated_snake_case(app_and_client):
+    """GET /runs/{run_id}/cli returns 200 with auto-generated CLI (snake_case) for valid run."""
+    _, client, _, _ = app_and_client
+    r = client.post("/runs", json={})
+    assert r.status_code == 201
+    run_id = r.json()["run_id"]
+    cli_res = client.get(f"/runs/{run_id}/cli")
+    assert cli_res.status_code == 200
+    cli = cli_res.json()
+    assert cli.get("prompt") == "Choose an action"
+    assert cli.get("hint") == "Start"
+    assert "options" in cli
+    assert len(cli["options"]) == 1
+    assert cli["options"][0]["action"] == "start"
+    assert cli["options"][0]["label"] == "start"
+
+
+def test_get_cli_404_unknown_run(app_and_client):
+    """GET /runs/{run_id}/cli returns 404 for unknown run."""
+    _, client, _, _ = app_and_client
+    r = client.get("/runs/nonexistent-run-id/cli")
+    assert r.status_code == 404
+    assert "hint" in r.json()
+
+
+def test_get_cli_with_hook_returns_custom_prompt_hint_labels():
+    """When workflow registers .cli(state, ...), GET /runs/{run_id}/cli returns custom prompt, hint, labels."""
+    transitions = [
+        TransitionDef(from_state="INIT", action="start", to_state="DONE"),
+        TransitionDef(from_state="INIT", action="skip", to_state="DONE"),
+    ]
+    w = (
+        SCPWorkflow("wf-cli", "INIT", transitions, base_url="http://localhost:8000")
+        .hint("INIT", "Start or skip.")
+        .hint("DONE", "Done")
+        .cli(
+            "INIT",
+            prompt="What do you want to do?",
+            hint="Pick start or skip.",
+            options=[
+                {"action": "start", "label": "Start workflow", "keys": "1"},
+                {"action": "skip", "label": "Skip", "keys": "2"},
+            ],
+        )
+    )
+    store = {}
+    app = create_app(w, store=store)
+    client = TestClient(app)
+    r = client.post("/runs", json={})
+    assert r.status_code == 201
+    run_id = r.json()["run_id"]
+    cli_res = client.get(f"/runs/{run_id}/cli")
+    assert cli_res.status_code == 200
+    cli = cli_res.json()
+    assert cli["prompt"] == "What do you want to do?"
+    assert cli["hint"] == "Pick start or skip."
+    assert len(cli["options"]) == 2
+    start_opt = next(o for o in cli["options"] if o["action"] == "start")
+    assert start_opt["label"] == "Start workflow"
+    assert start_opt.get("keys") == "1"
+    skip_opt = next(o for o in cli["options"] if o["action"] == "skip")
+    assert skip_opt["label"] == "Skip"
+
+
 def test_transition_missing_expects(app_and_client):
     transitions = [
         TransitionDef(from_state="INIT", action="submit", to_state="DONE", expects={"name": "string"}),
     ]
-    w = SWPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
+    w = SCPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
     app = create_app(w, store={})
     client = TestClient(app)
     r = client.post("/runs", json={})
@@ -173,7 +243,7 @@ def test_transition_merges_only_expects_keys_into_run_data():
     transitions = [
         TransitionDef(from_state="INIT", action="go", to_state="DONE", expects={"a": "string", "n": "number"}),
     ]
-    w = SWPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
+    w = SCPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
     store = {}
     app = create_app(w, store=store)
     client = TestClient(app)
@@ -198,7 +268,7 @@ def test_discovery_returns_all_next_states():
         TransitionDef(from_state="INIT", action="start", to_state="DONE"),
         TransitionDef(from_state="INIT", action="skip", to_state="DONE"),
     ]
-    w = SWPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
+    w = SCPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
     app = create_app(w, store={})
     client = TestClient(app)
     r = client.get("/")
@@ -225,7 +295,7 @@ def test_openapi_json(app_and_client):
     assert r.status_code == 200
     data = r.json()
     assert data.get("openapi") == "3.0.3"
-    assert "Stateful Workflow Protocol" in data.get("info", {}).get("title", "")
+    assert "Structured Command Protocol" in data.get("info", {}).get("title", "")
     assert data.get("info", {}).get("x-workflow-id") == w.workflow_id
     assert "/runs" in data.get("paths", {})
     assert "StateFrame" in data.get("components", {}).get("schemas", {})
@@ -252,7 +322,7 @@ def app_with_stage_integrations():
         return {"summary": "Lint report", "data": run_record.get("data", {})}
 
     w = (
-        SWPWorkflow("stage-wf", "INIT", transitions, base_url="http://test")
+        SCPWorkflow("stage-wf", "INIT", transitions, base_url="http://test")
         .hint("INIT", "Start")
         .hint("LINT", "Run linter or read report, then lint_done")
         .hint("DONE", "Done")
@@ -275,7 +345,7 @@ def test_build_frame_includes_tools_and_resources_only_in_that_state():
         return ""
 
     w = (
-        SWPWorkflow("wf", "A", transitions, base_url="http://test")
+        SCPWorkflow("wf", "A", transitions, base_url="http://test")
         .tool("A", "my_tool", noop_tool, description="A tool")
         .resource("A", "my_res", noop_res, name="My resource")
     )
@@ -412,7 +482,7 @@ def test_resource_handler_returns_string():
         return "# Report\nHello"
 
     w = (
-        SWPWorkflow("wf2", "INIT", [TransitionDef(from_state="INIT", action="go", to_state="X")], base_url="http://test")
+        SCPWorkflow("wf2", "INIT", [TransitionDef(from_state="INIT", action="go", to_state="X")], base_url="http://test")
         .resource("X", "report", text_resource, mime_type="text/markdown")
     )
     store = {}
@@ -427,9 +497,34 @@ def test_resource_handler_returns_string():
     assert res.headers.get("content-type", "").startswith("text/markdown")
 
 
-# --- SWPClient: parse frame ---
-def test_swp_client_parse_frame():
-    """SWPClient can parse a State Frame from JSON."""
+# --- SCPClient: parse frame ---
+@pytest.mark.skipif(not HAS_ASGI_TRANSPORT, reason="httpx ASGITransport not available")
+def test_scp_client_cli_mode_get_cli_and_step_to_end():
+    """Client CLI mode: SCPClient get_frame, get_cli, transition, get_cli; step through to DONE."""
+    transitions = [TransitionDef(from_state="INIT", action="start", to_state="DONE")]
+    w = SCPWorkflow("test-wf", "INIT", transitions, base_url="http://testserver").hint("INIT", "Start").hint("DONE", "Done")
+    store = {}
+    app = create_app(w, store=store)
+    import httpx
+    transport = ASGITransport(app=app)
+    http_client = httpx.Client(transport=transport, base_url="http://testserver")
+    client = SCPClient("http://testserver", client=http_client)
+    try:
+        frame0 = client.start_run()
+        assert frame0.state == "INIT"
+        cli0 = client.get_cli()
+        assert cli0["options"]
+        assert cli0["options"][0]["action"] == "start"
+        frame1 = client.transition("start")
+        assert frame1.state == "DONE"
+        cli1 = client.get_cli()
+        assert cli1.get("options") == []
+    finally:
+        http_client.close()
+
+
+def test_scp_client_parse_frame():
+    """SCPClient can parse a State Frame from JSON."""
     frame_json = {
         "run_id": "run-x",
         "workflow_id": "w",
@@ -438,7 +533,7 @@ def test_swp_client_parse_frame():
         "hint": "Go",
         "next_states": [{"action": "a", "method": "POST", "href": "http://localhost/runs/run-x/transitions/a"}],
     }
-    client = SWPClient("http://localhost:8000")
+    client = SCPClient("http://localhost:8000")
     frame = client._parse_frame(frame_json)
     assert frame.run_id == "run-x"
     assert frame.state == "S"

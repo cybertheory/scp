@@ -1,6 +1,6 @@
-# SWP Documentation
+# SCP Documentation
 
-Detailed documentation for every feature of the Stateful Workflow Protocol (SWP) and its SDKs.
+Detailed documentation for every feature of the Structured Command Protocol (SCP) and its SDKs.
 
 ---
 
@@ -20,14 +20,13 @@ Detailed documentation for every feature of the Stateful Workflow Protocol (SWP)
 | [**Stage integrations (tools & resources)**](stage-integrations.md) | Stage-bound tools (callable) and resources (read-only): handlers, API, and examples in Python and TypeScript. |
 | [**Agent skills**](agent-skills.md) | Just-in-time skill loading from `active_skill.url`, integration with the Open Agent Skill spec. |
 | [**Streamable HTTP**](streaming.md) | NDJSON streaming, 202 + stream, resumption with `Mcp-Session-Id` and `Last-Event-ID`. |
+| [**Dynamic CLI**](dynamic-cli.md) | Remote dynamic CLI: GET /runs/{run_id}/cli, hooks and auto-generation, CLRUN support. |
 
 ---
 
-## Getting started
-
 | Doc | Description |
 |-----|-------------|
-| [**Quickstart**](quickstart.md) | Run your first SWP server and client: Python (FastAPI), TypeScript (Hono), and raw HTTP/curl. |
+| [**Quickstart**](quickstart.md) | Run your first SCP server and client: Python (FastAPI), TypeScript (Hono), and raw HTTP/curl. |
 
 ---
 
@@ -44,7 +43,7 @@ Detailed documentation for every feature of the Stateful Workflow Protocol (SWP)
 | Doc | Description |
 |-----|-------------|
 | [**Client-side local FSM**](client-local-fsm.md) | Run an in-memory FSM with no server; mix local and remote backends in parallel. |
-| [**Client discovery config**](client-discovery.md) | JSON config (MCP-style), `SWPClientRegistry`, servers vs embedded FSMs, and dynamic server add. |
+| [**Client discovery config**](client-discovery.md) | JSON config (MCP-style), `SCPClientRegistry`, servers vs embedded FSMs, and dynamic server add. |
 
 ---
 
@@ -61,5 +60,6 @@ Detailed documentation for every feature of the Stateful Workflow Protocol (SWP)
 - **[spec/PROTOCOL.md](../spec/PROTOCOL.md)** — Protocol operations, discovery, transitions, streaming, resumption.
 - **[spec/STATE_FRAME.json](../spec/STATE_FRAME.json)** — JSON schema for the State Frame.
 - **[spec/CLIENT_CONFIG.json](../spec/CLIENT_CONFIG.json)** — JSON schema for client discovery config.
+- **[spec/CLI_SCHEMA.json](../spec/CLI_SCHEMA.json)** — JSON schema for the CLI response (GET /runs/{run_id}/cli).
 - **[spec/STAGE_INTEGRATIONS.md](../spec/STAGE_INTEGRATIONS.md)** — Stage tools and resources schema and semantics.
 - **[spec/SKILL_INTEGRATION.md](../spec/SKILL_INTEGRATION.md)** — Agent skill integration.

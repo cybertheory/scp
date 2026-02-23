@@ -1,13 +1,13 @@
-/** Base OpenAPI 3.0 spec for SWP. Single source: spec/openapi.json */
+/** Base OpenAPI 3.0 spec for SCP. Single source: spec/openapi.json */
 export const openapiBase = {
   openapi: "3.0.3",
   info: {
-    title: "Stateful Workflow Protocol (SWP)",
+    title: "Structured Command Protocol (SCP)",
     description:
-      "SWP exposes workflow state as State Frames. Each response is a State Frame: current state, hint, and valid next_states (transitions). Agents POST to transition hrefs to advance the run.",
+      "SCP exposes workflow state as State Frames. Each response is a State Frame: current state, hint, and valid next_states (transitions). Agents POST to transition hrefs to advance the run.",
     version: "1.0.0",
   },
-  servers: [{ url: "http://localhost:3000", description: "SWP server" }],
+  servers: [{ url: "http://localhost:3000", description: "SCP server" }],
   paths: {
     "/": {
       get: {
@@ -51,6 +51,18 @@ export const openapiBase = {
         parameters: [{ name: "run_id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
         responses: {
           "200": { description: "Current State Frame", content: { "application/json": { schema: { $ref: "#/components/schemas/StateFrame" } } } },
+          "404": { description: "Run not found" },
+        },
+      },
+    },
+    "/runs/{run_id}/cli": {
+      get: {
+        summary: "Get CLI representation",
+        description:
+          "Returns the CLI object for the current state. Always present on SCP servers. Used by clients in CLI mode (e.g. CLRUN) to drive a dynamic remote CLI. Response from workflow hooks or auto-generated from hint and next_states. Canonical JSON, snake_case.",
+        parameters: [{ name: "run_id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: {
+          "200": { description: "CLI object for current state", content: { "application/json": { schema: { $ref: "#/components/schemas/CliResponse" } } } },
           "404": { description: "Run not found" },
         },
       },
@@ -211,6 +223,27 @@ export const openapiBase = {
           data: { type: "object" },
           milestones: { type: "array", items: { type: "string" } },
           stream_url: { type: "string", format: "uri" },
+        },
+      },
+      CliResponse: {
+        type: "object",
+        description: "CLI representation for the current state. Served at GET /runs/{run_id}/cli only; not part of State Frame. Snake_case.",
+        properties: {
+          prompt: { type: "string", description: "Short prompt line for this state." },
+          hint: { type: "string", description: "CLI-specific hint for terminal users." },
+          options: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["action", "label"],
+              properties: {
+                action: { type: "string" },
+                label: { type: "string" },
+                keys: { type: "string", description: "Optional key sequence for TUI." },
+              },
+            },
+          },
+          input_hint: { type: "string", description: "When state expects free-form input." },
         },
       },
     },

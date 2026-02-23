@@ -1,17 +1,17 @@
 /**
- * CI-CD Bot - SWP example (TypeScript SDK).
+ * CI-CD Bot - SCP example (TypeScript SDK).
  * States: INITIAL -> LINT -> RUN_LINT -> REVIEW_RESULTS -> MERGE_OK | REQUEST_CHANGES
  *
  * Uses SDK createApp with tool hooks (run_lint_check) and resources (lint_help, lint_report).
  *
  * Run from repo root: npx tsx examples/ci-cd-bot/server.ts (imports from ../../sdks/typescript/src/...).
- * With the package installed: npm install swp-sdk && import from "swp-sdk" (see docs/quickstart.md).
+ * With the package installed: npm install scp-sdk && import from "scp-sdk" (see docs/quickstart.md).
  */
 import { execSync } from "child_process";
 import { readFileSync, existsSync, readdirSync } from "fs";
 import { join, resolve, normalize } from "path";
 import { serve } from "@hono/node-server";
-import { createApp, SWPWorkflow } from "../../sdks/typescript/src/server.js";
+import { createApp, SCPWorkflow } from "../../sdks/typescript/src/server.js";
 import type { RunRecord } from "../../sdks/typescript/src/server.js";
 import type { TransitionDef } from "../../sdks/typescript/src/models.js";
 
@@ -36,7 +36,7 @@ const transitions: TransitionDef[] = [
 ];
 
 const BASE = "http://localhost:3000";
-const workflow = new SWPWorkflow("ci-cd-bot-v1", "INITIAL", transitions, BASE)
+const workflow = new SCPWorkflow("ci-cd-bot-v1", "INITIAL", transitions, BASE)
   .hint("INITIAL", "Start the CI-CD workflow. Use the 'start' action.")
   .hint(
     "LINT",
@@ -177,6 +177,6 @@ app.get("/skills/*", async (c) => {
 });
 
 const port = 3000;
-console.log(`SWP CI-CD server at http://localhost:${port}`);
+console.log(`SCP CI-CD server at http://localhost:${port}`);
 serve({ fetch: app.fetch, port });
 export { app };

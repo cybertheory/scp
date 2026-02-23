@@ -1,9 +1,10 @@
 import type { StateFrame } from "./models.js";
 import { StateFrameSchema } from "./models.js";
-import type { SWPBackend } from "./local.js";
-import { HttpSWPBackend } from "./backend-http.js";
+import type { CliResponse } from "./models.js";
+import type { SCPBackend } from "./local.js";
+import { HttpSCPBackend } from "./backend-http.js";
 
-/** Map SWP expects type string to OpenAI JSON schema type */
+/** Map SCP expects type string to OpenAI JSON schema type */
 function openaiType(typ: string): string {
   const t = (typ || "string").toLowerCase();
   if (["number", "int", "integer", "float"].includes(t)) return "number";
@@ -18,18 +19,18 @@ export type OpenAITool = {
 };
 
 /**
- * SWP client: works with a remote server (baseUrl) or a local backend (LocalSWPBackend).
+ * SCP client: works with a remote server (baseUrl) or a local backend (LocalSCPBackend).
  * Use one or multiple clients in parallel for mixed local + remote capabilities.
  */
-export class SWPClient {
-  private backend: SWPBackend;
+export class SCPClient {
+  private backend: SCPBackend;
   private _runId: string | null = null;
 
-  /** Pass a baseUrl (string) for HTTP, or an SWPBackend (e.g. LocalSWPBackend) for local or custom. */
-  constructor(baseUrlOrBackend: string | SWPBackend, timeout = 30_000) {
+  /** Pass a baseUrl (string) for HTTP, or an SCPBackend (e.g. LocalSCPBackend) for local or custom. */
+  constructor(baseUrlOrBackend: string | SCPBackend, timeout = 30_000) {
     this.backend =
       typeof baseUrlOrBackend === "string"
-        ? new HttpSWPBackend(baseUrlOrBackend, timeout)
+        ? new HttpSCPBackend(baseUrlOrBackend, timeout)
         : baseUrlOrBackend;
   }
 
@@ -43,6 +44,14 @@ export class SWPClient {
     const rid = runId ?? this._runId;
     if (!rid) throw new Error("No run_id; call startRun first or pass runId");
     return this.backend.getFrame(rid);
+  }
+
+  /** Fetch GET /runs/{run_id}/cli. Use after getFrame() or transition() in CLI mode to update the interface. */
+  async getCli(runId?: string): Promise<CliResponse> {
+    const rid = runId ?? this._runId;
+    if (!rid) throw new Error("No run_id; call startRun first or pass runId");
+    if (!this.backend.getCli) throw new Error("Backend does not support getCli");
+    return this.backend.getCli(rid);
   }
 
   async transition(

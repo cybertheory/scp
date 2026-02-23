@@ -1,14 +1,14 @@
 /**
- * Agent integration tests: OpenAI (mini) drives SWP via client and registry.
+ * Agent integration tests: OpenAI (mini) drives SCP via client and registry.
  * Requires OPENAI_API_KEY. Skipped if not set.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   createApp,
-  SWPWorkflow,
-  SWPClient,
-  SWPClientRegistry,
-  LocalSWPBackend,
+  SCPWorkflow,
+  SCPClient,
+  SCPClientRegistry,
+  LocalSCPBackend,
   type TransitionDef,
 } from "../src/index.js";
 import type { StateFrame } from "../src/models.js";
@@ -22,7 +22,7 @@ const transitions: TransitionDef[] = [
 
 const AGENT_TEST_PORT = 18766;
 const store: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
-const workflow = new SWPWorkflow(
+const workflow = new SCPWorkflow(
   "agent-test-wf",
   "INIT",
   transitions,
@@ -49,13 +49,13 @@ afterAll(() => {
 });
 
 /** Build OpenAI tools + executor for a registry (list_servers, start_run, transition, optional add_server). */
-function registryAgentTools(registry: SWPClientRegistry, runIds: Record<string, string>, options: { addServer?: boolean } = {}) {
+function registryAgentTools(registry: SCPClientRegistry, runIds: Record<string, string>, options: { addServer?: boolean } = {}) {
   const tools: Array<{ type: "function"; function: { name: string; description: string; parameters: { type: "object"; properties: Record<string, unknown>; required: string[] } } }> = [
     {
       type: "function",
       function: {
         name: "list_servers",
-        description: "List available SWP servers and embedded FSMs (id and type).",
+        description: "List available SCP servers and embedded FSMs (id and type).",
         parameters: { type: "object", properties: {}, required: [] },
       },
     },
@@ -94,12 +94,12 @@ function registryAgentTools(registry: SWPClientRegistry, runIds: Record<string, 
       type: "function",
       function: {
         name: "add_server",
-        description: "Dynamically add an SWP server by URL (e.g. from a skill or prompt).",
+        description: "Dynamically add an SCP server by URL (e.g. from a skill or prompt).",
         parameters: {
           type: "object",
           properties: {
             id: { type: "string", description: "Label for this server" },
-            base_url: { type: "string", description: "Base URL of the SWP server" },
+            base_url: { type: "string", description: "Base URL of the SCP server" },
           },
           required: ["id", "base_url"],
         },
@@ -153,7 +153,7 @@ describe("Agent drives workflow via OpenAI mini", () => {
     async () => {
       const { default: OpenAI } = await import("openai");
       const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-      const client = new SWPClient(baseUrl, 10_000);
+      const client = new SCPClient(baseUrl, 10_000);
       const model = "gpt-4o-mini";
 
       let frame: StateFrame = await client.startRun();
@@ -198,11 +198,11 @@ describe("Agent with registry: HTTP server + embedded FSM in parallel", () => {
   it.skipIf(!OPENAI_API_KEY)(
     "agent interacts with both http and embedded workflows and completes both",
     async () => {
-      const wfEmbedded = new SWPWorkflow("embedded-wf", "INIT", transitions, "memory:")
+      const wfEmbedded = new SCPWorkflow("embedded-wf", "INIT", transitions, "memory:")
         .hint("INIT", "Use the start tool to complete.").hint("DONE", "Done.");
-      const registry = new SWPClientRegistry({
+      const registry = new SCPClientRegistry({
         config: { servers: [{ id: "http", base_url: baseUrl }] },
-        localFsms: { embedded: new LocalSWPBackend(wfEmbedded, {}) },
+        localFsms: { embedded: new LocalSCPBackend(wfEmbedded, {}) },
       });
       const runIds: Record<string, string> = {};
       const { tools, execute } = registryAgentTools(registry, runIds);
@@ -266,7 +266,7 @@ describe("Agent dynamic configuration: add server from URL then run", () => {
   it.skipIf(!OPENAI_API_KEY)(
     "agent receives URL in prompt, adds server via add_server, then completes workflow on it",
     async () => {
-      const registry = new SWPClientRegistry({});
+      const registry = new SCPClientRegistry({});
       const runIds: Record<string, string> = {};
       const { tools, execute } = registryAgentTools(registry, runIds, { addServer: true });
 
@@ -278,7 +278,7 @@ describe("Agent dynamic configuration: add server from URL then run", () => {
       const messages: Message[] = [
         {
           role: "user",
-          content: `A new SWP server is available at ${dynamicUrl}. First call add_server with id "dynamic" and base_url "${dynamicUrl}". Then call list_servers, start a run on "dynamic" with start_run, and complete it by calling transition with action "start". Reply DONE when the workflow is complete.`,
+          content: `A new SCP server is available at ${dynamicUrl}. First call add_server with id "dynamic" and base_url "${dynamicUrl}". Then call list_servers, start a run on "dynamic" with start_run, and complete it by calling transition with action "start". Reply DONE when the workflow is complete.`,
         },
       ];
       const maxCalls = 15;

@@ -1,11 +1,11 @@
 /**
- * Tests for SWP TypeScript SDK: FSM, State Frame, client-server, visualizer.
+ * Tests for SCP TypeScript SDK: FSM, State Frame, client-server, visualizer.
  */
 import { describe, it, expect } from "vitest";
 import {
   createApp,
-  SWPWorkflow,
-  SWPClient,
+  SCPWorkflow,
+  SCPClient,
   visualizeFsm,
   type TransitionDef,
 } from "../../sdks/typescript/src/index.js";
@@ -14,9 +14,9 @@ const transitions: TransitionDef[] = [
   { from_state: "INIT", action: "start", to_state: "DONE" },
 ];
 
-describe("SWP Workflow", () => {
+describe("SCP Workflow", () => {
   it("builds frame with next_states", () => {
-    const w = new SWPWorkflow("wf1", "INIT", transitions, "http://localhost:3000");
+    const w = new SCPWorkflow("wf1", "INIT", transitions, "http://localhost:3000");
     w.hint("INIT", "Start here.");
     const frame = w.buildFrame("run-123", "INIT");
     expect(frame.run_id).toBe("run-123");
@@ -32,7 +32,7 @@ describe("SWP Workflow", () => {
       { from_state: "A", action: "x", to_state: "B" },
       { from_state: "A", action: "y", to_state: "C" },
     ];
-    const w = new SWPWorkflow("wf1", "A", ts);
+    const w = new SCPWorkflow("wf1", "A", ts);
     expect(w.getTransition("A", "x")?.to_state).toBe("B");
     expect(w.getTransition("A", "z")).toBeNull();
   });
@@ -52,9 +52,9 @@ describe("visualizeFsm", () => {
   });
 });
 
-describe("SWP Server + Client", () => {
+describe("SCP Server + Client", () => {
   const store: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
-  const w = new SWPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done");
+  const w = new SCPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done");
   const app = createApp(w, store);
 
   it("POST /runs returns 201 and frame", async () => {
@@ -126,7 +126,7 @@ describe("SWP Server + Client", () => {
   });
 });
 
-describe("SWPClient parse frame", () => {
+describe("SCPClient parse frame", () => {
   it("parses State Frame JSON", async () => {
     const { StateFrameSchema } = await import("../../sdks/typescript/src/models.js");
     const frameJson = {
@@ -146,12 +146,12 @@ describe("SWPClient parse frame", () => {
 
 describe("Stage integrations – tool logic executes when stepping through FSM", () => {
   it("invoke tool runs handler and returns result after transition to state with tool", async () => {
-    const { createApp, SWPWorkflow } = await import("../../sdks/typescript/src/index.js");
+    const { createApp, SCPWorkflow } = await import("../../sdks/typescript/src/index.js");
     const transitions = [
       { from_state: "INIT", action: "start", to_state: "LINT" },
     ];
     let invoked = false;
-    const w = new SWPWorkflow("wf", "INIT", transitions, "http://localhost")
+    const w = new SCPWorkflow("wf", "INIT", transitions, "http://localhost")
       .hint("INIT", "Start")
       .hint("LINT", "Lint")
       .tool("LINT", "run_linter", (_rid, _rec, body) => {

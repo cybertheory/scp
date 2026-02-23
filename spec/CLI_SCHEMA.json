@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://scp.dev/schemas/CLI_SCHEMA.json",
+  "title": "SCP CLI Response",
+  "description": "CLI representation for the current state of a run. Served at GET /runs/{run_id}/cli. JSON only, snake_case. Clients and tools (e.g. CLRUN) MUST use this structure. Not part of the State Frame.",
+  "type": "object",
+  "properties": {
+    "prompt": {
+      "type": "string",
+      "description": "Short prompt line for this state (e.g. 'Choose an action')."
+    },
+    "hint": {
+      "type": "string",
+      "description": "CLI-specific hint; can mirror or refine the State Frame hint for terminal users."
+    },
+    "options": {
+      "type": "array",
+      "description": "One entry per next_states item; for rendering as a select list.",
+      "items": {
+        "type": "object",
+        "required": ["action", "label"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Transition name; matches next_states[].action."
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label for the option (e.g. 'Submit for audit')."
+          },
+          "keys": {
+            "type": "string",
+            "description": "Optional suggested key sequence for TUI (e.g. 'enter', 'down enter')."
+          }
+        }
+      }
+    },
+    "input_hint": {
+      "type": "string",
+      "description": "When state expects free-form input (e.g. 'Enter reason')."
+    }
+  },
+  "additionalProperties": false
+}

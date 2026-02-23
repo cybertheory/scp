@@ -1,4 +1,4 @@
-"""SWP server: FastAPI app factory and workflow runner with FSM, guards, and NDJSON stream."""
+"""SCP server: FastAPI app factory and workflow runner with FSM, guards, and NDJSON stream."""
 from __future__ import annotations
 
 import json
@@ -11,24 +11,24 @@ from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse, Response
 from pydantic import BaseModel
 
-from .models import StateFrame, NextState, ActiveSkill, TransitionDef, StageToolDef, StageResourceDef
+from .models import StateFrame, NextState, ActiveSkill, TransitionDef, StageToolDef, StageResourceDef, CliOption, StateFrameCli
 from .visualize import visualize_fsm
 from .store import Store, InMemoryStore, RunRecord
 
 
-REDIS_STREAM_CHANNEL_PREFIX = "swp:stream:"
+REDIS_STREAM_CHANNEL_PREFIX = "scp:stream:"
 
 
 def _ndjson_line(obj: dict) -> bytes:
     return (json.dumps(obj) + "\n").encode("utf-8")
 
 
-def _redis_stream_store(inner: Store, redis_url: str, workflow: "SWPWorkflow") -> Store:
+def _redis_stream_store(inner: Store, redis_url: str, workflow: "SCPWorkflow") -> Store:
     """Wrap a store to publish State Frames to Redis on every set(), for GET /stream subscribers."""
     try:
         import redis
     except ImportError:
-        raise ImportError("Redis streaming requires the 'redis' package. pip install swp-sdk[redis] or pip install redis")
+        raise ImportError("Redis streaming requires the 'redis' package. pip install scp-sdk[redis] or pip install redis")
     client = redis.from_url(redis_url, decode_responses=False)
 
     class _Wrapper(Store):
@@ -50,13 +50,13 @@ def _redis_stream_store(inner: Store, redis_url: str, workflow: "SWPWorkflow") -
 
 
 async def _redis_stream_provider(
-    run_id: str, last_event_id: str, get_run: Callable[[str], RunRecord], workflow: "SWPWorkflow", redis_url: str
+    run_id: str, last_event_id: str, get_run: Callable[[str], RunRecord], workflow: "SCPWorkflow", redis_url: str
 ) -> AsyncIterator[dict]:
     """Async generator: yield current frame, then yield each message from Redis pub/sub for this run."""
     try:
         from redis.asyncio import Redis
     except ImportError:
-        raise ImportError("Redis streaming requires the 'redis' package. pip install swp-sdk[redis] or pip install redis")
+        raise ImportError("Redis streaming requires the 'redis' package. pip install scp-sdk[redis] or pip install redis")
     r = get_run(run_id)
     frame = workflow.build_frame(
         run_id, r["state"], data=r.get("data"), milestones=r.get("milestones")
@@ -79,7 +79,7 @@ async def _redis_stream_provider(
         await redis_client.aclose()
 
 
-class SWPWorkflow:
+class SCPWorkflow:
     """Defines a workflow FSM and produces State Frames."""
 
     def __init__(
@@ -100,17 +100,18 @@ class SWPWorkflow:
         self._state_status: dict[str, str] = {}
         self._state_tools: dict[str, dict[str, dict[str, Any]]] = {}  # state -> name -> {handler, description?, expects?}
         self._state_resources: dict[str, dict[str, dict[str, Any]]] = {}  # state -> path -> {handler, name?, mime_type?}
+        self._state_cli: dict[str, StateFrameCli] = {}
 
-    def hint(self, state: str, text: str) -> "SWPWorkflow":
+    def hint(self, state: str, text: str) -> "SCPWorkflow":
         self._state_hints[state] = text
         return self
 
-    def skill(self, state: str, name: str, path: str, context_summary: Optional[str] = None) -> "SWPWorkflow":
+    def skill(self, state: str, name: str, path: str, context_summary: Optional[str] = None) -> "SCPWorkflow":
         url = f"{self.skill_base_url.rstrip('/')}/skills/{path}"
         self._state_skills[state] = ActiveSkill(name=name, url=url, context_summary=context_summary)
         return self
 
-    def status_default(self, state: str, status: str) -> "SWPWorkflow":
+    def status_default(self, state: str, status: str) -> "SCPWorkflow":
         self._state_status[state] = status
         return self
 
@@ -121,7 +122,7 @@ class SWPWorkflow:
         handler: Callable[..., Any],
         description: Optional[str] = None,
         expects: Optional[dict[str, str]] = None,
-    ) -> "SWPWorkflow":
+    ) -> "SCPWorkflow":
         """Register a stage-bound tool. Handler(run_id, run_record, body) -> dict."""
         self._state_tools.setdefault(state, {})[name] = {
             "handler": handler,
@@ -137,13 +138,28 @@ class SWPWorkflow:
         handler: Callable[..., Any],
         name: Optional[str] = None,
         mime_type: Optional[str] = None,
-    ) -> "SWPWorkflow":
+    ) -> "SCPWorkflow":
         """Register a stage-bound resource. Handler(run_id, run_record) -> bytes | str | dict."""
         self._state_resources.setdefault(state, {})[path] = {
             "handler": handler,
             "name": name,
             "mime_type": mime_type,
         }
+        return self
+
+    def cli(
+        self,
+        state: str,
+        prompt: Optional[str] = None,
+        hint: Optional[str] = None,
+        options: Optional[list[dict[str, Any]]] = None,
+        input_hint: Optional[str] = None,
+    ) -> "SCPWorkflow":
+        """Register optional CLI representation for a state (hook). When not set, GET /runs/{run_id}/cli auto-generates from hint and next_states."""
+        opts: Optional[list[CliOption]] = None
+        if options is not None:
+            opts = [CliOption(action=o["action"], label=o["label"], keys=o.get("keys")) for o in options]
+        self._state_cli[state] = StateFrameCli(prompt=prompt, hint=hint, options=opts, input_hint=input_hint)
         return self
 
     def _next_states(self, from_state: str, run_id: str) -> list[NextState]:
@@ -219,24 +235,72 @@ class SWPWorkflow:
                 return t
         return None
 
+    def build_cli_from_frame(self, run_id: str, state: str, frame: StateFrame) -> StateFrameCli:
+        """Build CLI object from current frame when no hook is set (auto-generation)."""
+        options = [
+            CliOption(action=ns.action, label=ns.action)
+            for ns in frame.next_states
+        ]
+        hint = frame.hint or "Proceed."
+        return StateFrameCli(
+            prompt="Choose an action",
+            hint=hint,
+            options=options,
+            input_hint=None,
+        )
+
+    def get_cli(self, run_id: str, get_run: Callable[[str], RunRecord]) -> StateFrameCli:
+        """Return CLI object for current run state: from hook if set, else auto-generated from frame."""
+        r = get_run(run_id)
+        state = r["state"]
+        frame = self.build_frame(
+            run_id,
+            state,
+            data=r.get("data"),
+            milestones=r.get("milestones"),
+        )
+        if state in self._state_cli:
+            hook = self._state_cli[state]
+            # Merge with next_states so options stay in sync; use hook labels/keys when provided
+            opts = hook.options
+            if opts is None:
+                opts = [CliOption(action=ns.action, label=ns.action) for ns in frame.next_states]
+            else:
+                action_to_ns = {ns.action: ns for ns in frame.next_states}
+                merged = []
+                for o in opts:
+                    if o.action in action_to_ns:
+                        merged.append(o)
+                for ns in frame.next_states:
+                    if not any(m.action == ns.action for m in merged):
+                        merged.append(CliOption(action=ns.action, label=ns.action))
+                opts = merged
+            return StateFrameCli(
+                prompt=hook.prompt or "Choose an action",
+                hint=hook.hint or frame.hint,
+                options=opts,
+                input_hint=hook.input_hint,
+            )
+        return self.build_cli_from_frame(run_id, state, frame)
+
 
 def create_app(
-    workflow: SWPWorkflow,
+    workflow: SCPWorkflow,
     store: Optional[Union[Store, dict[str, Any]]] = None,
     stream_callback: Optional[Callable[[str, StateFrame], None]] = None,
     stream_provider: Optional[Callable[[str, str], AsyncIterator[dict]]] = None,
     redis_url: Optional[str] = None,
 ) -> FastAPI:
-    """Create FastAPI app with SWP routes.
+    """Create FastAPI app with SCP routes.
 
     - store: Store implementation, dict (in-memory), or None.
     - stream_callback: Called when a 202 NDJSON response is sent after a transition.
     - stream_provider: Optional async generator (run_id, last_event_id) -> yields frame dicts for GET /runs/{run_id}/stream.
       If None (and redis_url is not set), the default dev implementation is used (simple polling loop).
     - redis_url: If set, enables first-class Redis streaming: every store update is published to Redis, and GET /stream
-      subscribes to the run's channel. Requires: pip install swp-sdk[redis]
+      subscribes to the run's channel. Requires: pip install scp-sdk[redis]
     """
-    app = FastAPI(title="SWP Server", version="0.1.0")
+    app = FastAPI(title="SCP Server", version="0.1.0")
     if store is None:
         _store: Store = InMemoryStore()
     elif isinstance(store, dict):
@@ -259,10 +323,10 @@ def create_app(
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
     # Load OpenAPI spec and set server URL to workflow base_url; override FastAPI's default schema
-    _openapi_path = _pkg_files(__package__ or "swp") / "openapi.json"
+    _openapi_path = _pkg_files(__package__ or "scp") / "openapi.json"
     if _openapi_path.exists():
         _openapi_spec = json.loads(_openapi_path.read_text())
-        _openapi_spec["servers"] = [{"url": workflow.base_url, "description": "SWP server"}]
+        _openapi_spec["servers"] = [{"url": workflow.base_url, "description": "SCP server"}]
         _openapi_spec["info"]["x-workflow-id"] = workflow.workflow_id
 
         def _custom_openapi():
@@ -321,6 +385,12 @@ def create_app(
             milestones=r.get("milestones"),
         )
         return frame.model_dump(by_alias=True, exclude_none=True)
+
+    @app.get("/runs/{run_id}/cli")
+    async def get_cli(run_id: str):
+        """Get CLI representation for current state. Always present; from hooks or auto-generated from hint and next_states."""
+        cli_obj = workflow.get_cli(run_id, get_run)
+        return cli_obj.model_dump(by_alias=True, exclude_none=True)
 
     @app.post("/runs/{run_id}/transitions/{action}")
     async def transition(
@@ -498,7 +568,7 @@ def create_app(
             current_state=current,
         )
         html = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>SWP FSM - {workflow.workflow_id}</title>
+<html><head><meta charset="utf-8"><title>SCP FSM - {workflow.workflow_id}</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script></head>
 <body><pre class="mermaid">{mermaid}</pre>
 <script>mermaid.initialize({{ startOnLoad: true }});</script></body></html>"""

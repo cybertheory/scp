@@ -5,7 +5,7 @@ import httpx
 from typing import Any, Callable, Optional, Tuple
 
 from .models import StateFrame
-from .client import SWPClient
+from .client import SCPClient
 
 
 def fetch_skill_content(url: str, timeout: float = 10.0) -> str:
@@ -34,15 +34,15 @@ def build_system_prompt(frame: StateFrame, skill_content: Optional[str] = None) 
     return "\n".join(parts)
 
 
-class SWPLLMWrapper:
+class SCPLLMWrapper:
     """
-    Wraps an SWP client and an LLM callable to inject State Frames into context.
+    Wraps an SCP client and an LLM callable to inject State Frames into context.
     Process guidance: each server response drives the next LLM turn via system message.
     """
 
     def __init__(
         self,
-        client: SWPClient,
+        client: SCPClient,
         llm_call: Callable[[str, list[dict]], str],
         fetch_skill: Callable[[str], str] = fetch_skill_content,
     ):

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-# Ensure SDK is on path (same as test_swp.py)
+# Ensure SDK is on path (same as test_scp.py)
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "sdks" / "python"))
 
@@ -129,3 +129,23 @@ def test_audit_report_resource_reflects_run_data(legal_client):
     assert "Audit report" in text or "audit" in text.lower()
     assert "doc.pdf" in text or "Document" in text
     assert "Risk" in text or "risk" in text
+
+
+def test_legal_review_serves_cli_endpoint_auto_generated(legal_client):
+    """Example server GET /runs/{run_id}/cli returns 200 with auto-generated CLI (snake_case)."""
+    r = legal_client.post("/runs", json={})
+    assert r.status_code == 201
+    run_id = r.json()["run_id"]
+    cli_res = legal_client.get(f"/runs/{run_id}/cli")
+    assert cli_res.status_code == 200
+    cli = cli_res.json()
+    assert "prompt" in cli or "hint" in cli or "options" in cli
+    assert isinstance(cli.get("options"), list)
+    assert len(cli["options"]) >= 1
+    assert cli["options"][0]["action"] == "start"
+    legal_client.post(f"/runs/{run_id}/transitions/start", json={})
+    cli_res2 = legal_client.get(f"/runs/{run_id}/cli")
+    assert cli_res2.status_code == 200
+    cli2 = cli_res2.json()
+    actions = [o["action"] for o in cli2["options"]]
+    assert "submit_doc" in actions

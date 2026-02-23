@@ -3,9 +3,9 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "swp-sdk"
+name = "scp-sdk"
 version = "0.1.0"
-description = "Stateful Workflow Protocol - Python SDK (server, client, LLM wrapper, visualizer)"
+description = "Structured Command Protocol - Python SDK (server, client, LLM wrapper, visualizer)"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -21,7 +21,7 @@ redis = ["redis>=4.2"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["swp*"]
+include = ["scp*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,10 +1,10 @@
 /**
- * Server-agnostic SWP handler: Request → Response.
+ * Server-agnostic SCP handler: Request → Response.
  * Use with Cloudflare Workers, Supabase Edge Functions, Convex HTTP, or any fetch-based runtime.
  * No Hono dependency. Streamable HTTP (NDJSON) uses ReadableStream.
  */
 import type { StateFrame } from "./models.js";
-import type { SWPWorkflow } from "./server.js";
+import type { SCPWorkflow } from "./server.js";
 import type { RunRecord, StoreLike } from "./server.js";
 import { normalizeStore } from "./server.js";
 import { createRedisStream, wrapStoreWithRedisPublish } from "./redis-stream.js";
@@ -25,6 +25,7 @@ function matchPath(pathname: string): { route: string; runId?: string; action?: 
   const parts = path.split("/").filter(Boolean);
   if (parts.length === 0) return { route: "discovery" };
   if (parts[0] === "runs" && parts.length === 1) return { route: "runs" };
+  if (parts[0] === "runs" && parts[1] && parts[2] === "cli" && parts.length === 3) return { route: "cli", runId: parts[1] };
   if (parts[0] === "runs" && parts[1] && parts.length === 2) return { route: "getRun", runId: parts[1] };
   if (parts[0] === "runs" && parts[1] && parts[2] === "transitions" && parts[3]) return { route: "transition", runId: parts[1], action: parts[3] };
   if (parts[0] === "runs" && parts[1] && parts[2] === "invoke" && parts[3]) return { route: "invoke", runId: parts[1], toolName: parts[3] };
@@ -34,7 +35,7 @@ function matchPath(pathname: string): { route: string; runId?: string; action?: 
 }
 
 export type CreateFetchHandlerOptions = {
-  /** Base path to strip (e.g. "/api/swp" so request to /api/swp/runs is handled as /runs). Default "". */
+  /** Base path to strip (e.g. "/api/scp" so request to /api/scp/runs is handled as /runs). Default "". */
   basePath?: string;
   /** Called when a transition returns 202 + NDJSON stream (e.g. for server-side side effects). */
   streamCallback?: (run_id: string, frame: StateFrame) => void;
@@ -43,11 +44,11 @@ export type CreateFetchHandlerOptions = {
 };
 
 /**
- * Returns a fetch handler that runs the full SWP FSM (discovery, runs, transitions, tools, resources, stream).
+ * Returns a fetch handler that runs the full SCP FSM (discovery, runs, transitions, tools, resources, stream).
  * Use with: export default { fetch: createFetchHandler(workflow, store) } in Workers/Supabase/Convex.
  */
 export function createFetchHandler(
-  workflow: SWPWorkflow,
+  workflow: SCPWorkflow,
   storeLike: StoreLike = {},
   opts: CreateFetchHandlerOptions = {}
 ): (req: Request) => Promise<Response> {
@@ -105,6 +106,13 @@ export function createFetchHandler(
       if (!r) return jsonBody({ hint: "Run not found" }, 404);
       const frame = workflow.buildFrame(runId, r.state, { data: r.data, milestones: r.milestones });
       return jsonBody(frame);
+    }
+
+    if (route === "cli" && runId && method === "GET") {
+      const r = getRun(runId);
+      if (!r) return jsonBody({ hint: "Run not found" }, 404);
+      const cli = workflow.getCli(runId, getRun);
+      return jsonBody(cli);
     }
 
     if (route === "transition" && runId && action && method === "POST") {

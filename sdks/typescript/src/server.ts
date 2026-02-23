@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { stream } from "hono/streaming";
-import type { StateFrame, NextState, ActiveSkill, TransitionDef, StageToolDef, StageResourceDef } from "./models.js";
+import type { StateFrame, NextState, ActiveSkill, TransitionDef, StageToolDef, StageResourceDef, CliOption, CliResponse } from "./models.js";
 import { visualizeFsm } from "./visualize.js";
 import { openapiBase } from "./openapi-spec.js";
 import { createRedisStream, wrapStoreWithRedisPublish } from "./redis-stream.js";
@@ -19,7 +19,7 @@ export type ResourceHandler = (
   run_record: RunRecord
 ) => Promise<string | Buffer | Record<string, unknown>> | string | Buffer | Record<string, unknown>;
 
-export class SWPWorkflow {
+export class SCPWorkflow {
   workflow_id: string;
   initial_state: string;
   transitions: TransitionDef[];
@@ -30,6 +30,7 @@ export class SWPWorkflow {
   _state_status: Record<string, string> = {};
   _state_tools: Record<string, Record<string, { handler: ToolHandler; description?: string; expects?: Record<string, string> }>> = {};
   _state_resources: Record<string, Record<string, { handler: ResourceHandler; name?: string; mime_type?: string }>> = {};
+  _state_cli: Record<string, { prompt?: string; hint?: string; options?: CliOption[]; input_hint?: string }> = {};
 
   constructor(
     workflow_id: string,
@@ -88,6 +89,14 @@ export class SWPWorkflow {
       name: opts?.name,
       mime_type: opts?.mime_type,
     };
+    return this;
+  }
+
+  cli(
+    state: string,
+    opts: { prompt?: string; hint?: string; options?: CliOption[]; input_hint?: string }
+  ): this {
+    this._state_cli[state] = opts;
     return this;
   }
 
@@ -154,6 +163,42 @@ export class SWPWorkflow {
   getTransition(from_state: string, action: string): TransitionDef | null {
     return this.transitions.find((t) => t.from_state === from_state && t.action === action) ?? null;
   }
+
+  /** Build CLI from frame when no hook is set (auto-generation). Wire: snake_case. */
+  buildCliFromFrame(frame: StateFrame): CliResponse {
+    const options: CliOption[] = frame.next_states.map((ns) => ({
+      action: ns.action,
+      label: ns.action,
+    }));
+    return {
+      prompt: "Choose an action",
+      hint: frame.hint,
+      options,
+    };
+  }
+
+  /** Return CLI for current run state: from hook if set, else auto-generated. */
+  getCli(run_id: string, getRun: (id: string) => RunRecord | null): CliResponse {
+    const r = getRun(run_id);
+    if (!r) throw new Error("Run not found");
+    const frame = this.buildFrame(run_id, r.state, {
+      data: r.data,
+      milestones: r.milestones,
+    });
+    const hook = this._state_cli[r.state];
+    if (hook) {
+      const options =
+        hook.options ??
+        frame.next_states.map((ns) => ({ action: ns.action, label: ns.action }));
+      return {
+        prompt: hook.prompt ?? "Choose an action",
+        hint: hook.hint ?? frame.hint,
+        options,
+        input_hint: hook.input_hint,
+      };
+    }
+    return this.buildCliFromFrame(frame);
+  }
 }
 
 export type RunRecord = { state: string; data: Record<string, unknown>; milestones: string[] };
@@ -200,7 +245,7 @@ export type CreateAppOptions = {
 };
 
 export function createApp(
-  workflow: SWPWorkflow,
+  workflow: SCPWorkflow,
   storeLike: StoreLike = {},
   opts?: CreateAppOptions | ((run_id: string, frame: StateFrame) => void)
 ): Hono {
@@ -250,6 +295,14 @@ export function createApp(
       milestones: r.milestones,
     });
     return c.json(frame);
+  });
+
+  app.get("/runs/:run_id/cli", (c) => {
+    const run_id = c.req.param("run_id");
+    const r = getRun(run_id);
+    if (!r) return c.json({ hint: "Run not found" }, 404);
+    const cli = workflow.getCli(run_id, getRun);
+    return c.json(cli);
   });
 
   app.post("/runs/:run_id/transitions/:action", async (c) => {
@@ -403,7 +456,7 @@ export function createApp(
       current
     );
     const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>SWP FSM - ${workflow.workflow_id}</title>
+<html><head><meta charset="utf-8"><title>SCP FSM - ${workflow.workflow_id}</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script></head>
 <body><pre class="mermaid">${mermaid}</pre>
 <script>mermaid.initialize({ startOnLoad: true });</script></body></html>`;
@@ -413,7 +466,7 @@ export function createApp(
   app.get("/openapi.json", (c) => {
     const spec = {
       ...openapiBase,
-      servers: [{ url: workflow.base_url, description: "SWP server" }],
+      servers: [{ url: workflow.base_url, description: "SCP server" }],
       info: { ...openapiBase.info, "x-workflow-id": workflow.workflow_id },
     };
     return c.json(spec);

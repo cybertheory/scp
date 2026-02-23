@@ -28,6 +28,24 @@ export const StageResourceDefSchema = z.object({
   mime_type: z.string().optional(),
 });
 
+/** CLI option (snake_case on wire). */
+export const CliOptionSchema = z.object({
+  action: z.string(),
+  label: z.string(),
+  keys: z.string().optional(),
+});
+
+/** CLI representation for current state. Served at GET /runs/{run_id}/cli only; not in State Frame. Snake_case. */
+export const CliResponseSchema = z.object({
+  prompt: z.string().optional(),
+  hint: z.string().optional(),
+  options: z.array(CliOptionSchema).optional(),
+  input_hint: z.string().optional(),
+});
+
+export type CliOption = z.infer<typeof CliOptionSchema>;
+export type CliResponse = z.infer<typeof CliResponseSchema>;
+
 export const StateFrameSchema = z.object({
   run_id: z.string(),
   workflow_id: z.string(),

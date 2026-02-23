@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://swp.dev/schemas/STATE_FRAME.json",
-  "title": "SWP State Frame",
-  "description": "Single source of truth for an agent's current position in a workflow. Every SWP server response MUST conform to this schema.",
+  "$id": "https://scp.dev/schemas/STATE_FRAME.json",
+  "title": "SCP State Frame",
+  "description": "Single source of truth for an agent's current position in a workflow. Every SCP server response MUST conform to this schema.",
   "type": "object",
   "required": ["run_id", "workflow_id", "state", "status", "hint", "next_states"],
   "properties": {
@@ -19,7 +19,7 @@
     "resource_url": {
       "type": "string",
       "format": "uri",
-      "description": "Base URL of the SWP server for this run. Used for relative href resolution."
+      "description": "Base URL of the SCP server for this run. Used for relative href resolution."
     },
     "state": {
       "type": "string",

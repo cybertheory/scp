@@ -1,5 +1,5 @@
 """
-Legal Review Flow - SWP example (Python SDK).
+Legal Review Flow - SCP example (Python SDK).
 States: INITIAL -> UPLOAD -> ANALYZING -> REVIEW -> COMPLETED | FAILED
 
 Uses SDK create_app with tool hooks (validate_document, risk_summary) and
@@ -14,8 +14,8 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "sdks" / "python"))
 
-from swp import (
-    SWPWorkflow,
+from scp import (
+    SCPWorkflow,
     TransitionDef,
     create_app,
 )
@@ -45,7 +45,7 @@ transitions = [
 ]
 
 workflow = (
-    SWPWorkflow("legal-review-v1", "INITIAL", transitions, base_url="http://localhost:8000")
+    SCPWorkflow("legal-review-v1", "INITIAL", transitions, base_url="http://localhost:8000")
     .hint("INITIAL", "Start the legal review workflow. Use the 'start' action.")
     .hint(
         "UPLOAD",

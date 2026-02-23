@@ -1,6 +1,6 @@
 # State Frame
 
-The **State Frame** is the single source of truth for an agent in an SWP run. Every successful response from an SWP server is a State Frame: a JSON object that tells the agent where it is, what it can do next, and what context (skills, tools, resources) is available.
+The **State Frame** is the single source of truth for an agent in an SCP run. Every successful response from an SCP server is a State Frame: a JSON object that tells the agent where it is, what it can do next, and what context (skills, tools, resources) is available.
 
 ---
 
@@ -10,7 +10,7 @@ The **State Frame** is the single source of truth for an agent in an SWP run. Ev
 |-------|----------|---------|
 | `run_id` | Yes | Unique execution instance. Used for all subsequent requests and for attaching to the stream. |
 | `workflow_id` | Yes | Identifies the workflow blueprint (e.g. `document-approval-v1`, `ci-cd-bot-v1`). |
-| `resource_url` | No | Base URL of the SWP server for this run. Used to resolve relative `href` in `next_states`, tools, resources. |
+| `resource_url` | No | Base URL of the SCP server for this run. Used to resolve relative `href` in `next_states`, tools, resources. |
 | `state` | Yes | Current FSM node (e.g. `UPLOAD`, `AWAITING_AUDIT`, `COMPLETED`). |
 | `status` | Yes | `active` \| `processing` \| `awaiting_input` \| `completed` \| `failed`. |
 | `hint` | Yes | Natural language guidance for the LLM (system-prompt bridge). Explains what to do in this state and any guards. |
@@ -22,9 +22,9 @@ The **State Frame** is the single source of truth for an agent in an SWP run. Ev
 | `milestones` | No | Completed high-level objectives (e.g. `Identity Verified`, `Document Parsed`) for proactive context. |
 | `stream_url` | No | Endpoint for streamable HTTP (NDJSON). GET with `Accept: application/x-ndjson` to receive state updates. |
 
----
+**CLI representation:** CLI metadata is **not** in the State Frame. It is served at **`GET /runs/{run_id}/cli`** (or **`GET /runs/{run_id}/cli.json`**). Clients in CLI mode (e.g. CLRUN) fetch this after every status update to drive a TUI. See [Dynamic CLI](dynamic-cli.md).
 
-## Progressive disclosure
+---
 
 Only the **current** state and its `next_states` (and that state’s `tools` / `resources`) are exposed. There is no global tool menu. This keeps token usage minimal and makes the valid actions explicit.
 

@@ -1,6 +1,6 @@
 version: "3.8"
 services:
-  swp-python:
+  scp-python:
     build:
       context: .
       dockerfile: sdks/python/Dockerfile
@@ -9,9 +9,9 @@ services:
     volumes:
       - ./spec:/app/spec:ro
       - ./skills:/app/skills:ro
-    command: ["uvicorn", "swp.server:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["uvicorn", "scp.server:app", "--host", "0.0.0.0", "--port", "8000"]
     # Example app is mounted and run instead when testing examples
-  swp-typescript:
+  scp-typescript:
     build:
       context: .
       dockerfile: sdks/typescript/Dockerfile

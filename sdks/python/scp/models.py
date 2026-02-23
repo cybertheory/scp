@@ -1,4 +1,4 @@
-"""Pydantic models for SWP State Frame and related types."""
+"""Pydantic models for SCP State Frame and related types."""
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -37,8 +37,23 @@ class StageResourceDef(BaseModel):
     mime_type: Optional[str] = None
 
 
+class CliOption(BaseModel):
+    """One option in the CLI representation; maps to a next_state."""
+    action: str
+    label: str
+    keys: Optional[str] = None
+
+
+class StateFrameCli(BaseModel):
+    """CLI representation for the current state. Served at GET /runs/{run_id}/cli only; not in State Frame. Snake_case."""
+    prompt: Optional[str] = None
+    hint: Optional[str] = None
+    options: Optional[list[CliOption]] = None
+    input_hint: Optional[str] = None
+
+
 class StateFrame(BaseModel):
-    """SWP State Frame - single source of truth for the agent."""
+    """SCP State Frame - single source of truth for the agent."""
     run_id: str
     workflow_id: str
     state: str

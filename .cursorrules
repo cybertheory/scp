@@ -1,4 +1,4 @@
-# SWP Repository Rules
+# SCP Repository Rules
 
 ## Token efficiency
 - Always minimize JSON keys in State Frames when adding new fields (prefer short names where the spec allows).

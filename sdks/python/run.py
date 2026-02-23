@@ -1,12 +1,12 @@
-"""Run a default SWP server for Docker or local testing."""
-from swp import SWPWorkflow, TransitionDef, create_app
+"""Run a default SCP server for Docker or local testing."""
+from scp import SCPWorkflow, TransitionDef, create_app
 import uvicorn
 
 transitions = [
     TransitionDef(from_state="INIT", action="start", to_state="DONE"),
 ]
 workflow = (
-    SWPWorkflow("default-wf", "INIT", transitions, base_url="http://localhost:8000")
+    SCPWorkflow("default-wf", "INIT", transitions, base_url="http://localhost:8000")
     .hint("INIT", "Start the workflow.")
     .hint("DONE", "Workflow complete.")
 )

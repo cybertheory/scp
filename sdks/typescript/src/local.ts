@@ -1,15 +1,17 @@
 /**
- * Client-side local FSM: run an SWP workflow in-memory with no server.
+ * Client-side local FSM: run an SCP workflow in-memory with no server.
  * Use for offline flows, testing, or mixing local + remote capabilities in parallel.
  */
 import type { StateFrame } from "./models.js";
-import type { SWPWorkflow } from "./server.js";
+import type { CliResponse } from "./models.js";
+import type { SCPWorkflow } from "./server.js";
 import type { RunRecord, StoreLike } from "./server.js";
 import { normalizeStore } from "./server.js";
 
-export type SWPBackend = {
+export type SCPBackend = {
   startRun(data?: Record<string, unknown>): Promise<StateFrame>;
   getFrame(runId: string): Promise<StateFrame>;
+  getCli?(runId: string): Promise<CliResponse>;
   transition(runId: string, action: string, body?: Record<string, unknown>): Promise<StateFrame>;
   invokeTool?(runId: string, toolName: string, body?: Record<string, unknown>): Promise<unknown>;
   readResource?(runId: string, path: string): Promise<string | Record<string, unknown>>;
@@ -19,11 +21,11 @@ export type SWPBackend = {
 /**
  * Runs the workflow FSM locally: no HTTP, no server. Same semantics as the server (transitions, tools, resources, stream).
  */
-export class LocalSWPBackend implements SWPBackend {
-  private workflow: SWPWorkflow;
+export class LocalSCPBackend implements SCPBackend {
+  private workflow: SCPWorkflow;
   private store: { get(id: string): RunRecord | null; set(id: string, r: RunRecord): void };
 
-  constructor(workflow: SWPWorkflow, storeLike: StoreLike = {}) {
+  constructor(workflow: SCPWorkflow, storeLike: StoreLike = {}) {
     this.workflow = workflow;
     this.store = normalizeStore(storeLike);
   }
@@ -49,6 +51,12 @@ export class LocalSWPBackend implements SWPBackend {
       data: r.data,
       milestones: r.milestones,
     });
+  }
+
+  async getCli(runId: string): Promise<CliResponse> {
+    const r = this.store.get(runId);
+    if (!r) throw new Error("Run not found");
+    return this.workflow.getCli(runId, (id) => this.store.get(id));
   }
 
   async transition(

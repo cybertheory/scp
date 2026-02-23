@@ -1,4 +1,4 @@
-"""Store backends for SWP server: in-memory and Redis."""
+"""Store backends for SCP server: in-memory and Redis."""
 from __future__ import annotations
 
 import json
@@ -41,9 +41,9 @@ class InMemoryStore(Store):
 
 
 class RedisStore(Store):
-    """Redis-backed store. Requires redis package. Key: swp:run:{run_id}, value: JSON."""
+    """Redis-backed store. Requires redis package. Key: scp:run:{run_id}, value: JSON."""
 
-    def __init__(self, redis_url: str = "redis://localhost:6379", key_prefix: str = "swp:run:"):
+    def __init__(self, redis_url: str = "redis://localhost:6379", key_prefix: str = "scp:run:"):
         try:
             import redis
         except ImportError:

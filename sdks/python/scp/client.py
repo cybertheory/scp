@@ -1,4 +1,4 @@
-"""SWP client: fetch frames, trigger transitions, consume NDJSON stream, and OpenAI tool-calling."""
+"""SCP client: fetch frames, trigger transitions, consume NDJSON stream, and OpenAI tool-calling."""
 from __future__ import annotations
 
 import json
@@ -8,21 +8,23 @@ from typing import Any, Iterator, Optional
 from .models import StateFrame
 
 
-class SWPClient:
-    """HTTP client for SWP. Uses a shared connection by default for efficiency."""
+class SCPClient:
+    """HTTP client for SCP. Uses a shared connection by default for efficiency."""
 
-    def __init__(self, base_url: str, timeout: float = 30.0):
+    def __init__(self, base_url: str, timeout: float = 30.0, client: Optional[httpx.Client] = None):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._run_id: Optional[str] = None
         self._resource_url: Optional[str] = None
-        self._client = httpx.Client(base_url=self.base_url, timeout=self.timeout)
+        self._client = client if client is not None else httpx.Client(base_url=self.base_url, timeout=self.timeout)
+        if client is None and not getattr(self._client, "base_url", None):
+            self._client.base_url = self.base_url
 
     def close(self) -> None:
         """Close the underlying HTTP client. Call when done to free connections."""
         self._client.close()
 
-    def __enter__(self) -> "SWPClient":
+    def __enter__(self) -> "SCPClient":
         return self
 
     def __exit__(self, *args: Any) -> None:
@@ -48,6 +50,15 @@ class SWPClient:
         r = self._client.get(f"/runs/{rid}")
         r.raise_for_status()
         return self._parse_frame(r.json())
+
+    def get_cli(self, run_id: Optional[str] = None) -> dict[str, Any]:
+        """GET /runs/{run_id}/cli and return the CLI object (canonical snake_case). Call after get_frame or transition in CLI mode to update the interface."""
+        rid = run_id or self._run_id
+        if not rid:
+            raise ValueError("No run_id; call start_run first or pass run_id")
+        r = self._client.get(f"/runs/{rid}/cli")
+        r.raise_for_status()
+        return r.json()
 
     def transition(self, action: str, body: Optional[dict] = None, run_id: Optional[str] = None) -> StateFrame:
         """POST to the href for the given action. Body must satisfy expects."""

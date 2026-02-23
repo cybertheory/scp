@@ -1,6 +1,6 @@
-# Stateful Workflow Protocol (SWP)
+# Structured Command Protocol (SCP)
 
-**SWP is a lean, agent-native replacement for MCP.** While MCP treats agents as "tool-callers" with a static menu of capabilities, SWP treats them as **process executors** navigating a **Finite State Machine (FSM)**. The server exposes only the context that matters for the current step—a **State Frame**—so agents stay token-efficient and deterministic.
+**SCP is a lean, agent-native replacement for MCP.** While MCP treats agents as "tool-callers" with a static menu of capabilities, SCP treats them as **process executors** navigating a **Finite State Machine (FSM)**. The server exposes only the context that matters for the current step—a **State Frame**—so agents stay token-efficient and deterministic.
 
 ```mermaid
 flowchart LR
@@ -13,7 +13,7 @@ flowchart LR
     A --> U
     A --> V
 
-    subgraph SWP["SWP"]
+    subgraph SCP["SCP"]
         S[State Frame]
         S --> N[Next States]
     end
@@ -23,9 +23,9 @@ flowchart LR
 
 ---
 
-## Why SWP?
+## Why SCP?
 
-| | **MCP (legacy)** | **SWP (agent-native)** |
+| | **MCP (legacy)** | **SCP (agent-native)** |
 |---|------------------|-------------------------|
 | **Token usage** | High: loads all tool schemas up front | **Minimal**: only current state + one skill |
 | **Control** | Probabilistic: agent guesses next step | **Deterministic**: server enforces valid paths |
@@ -33,7 +33,7 @@ flowchart LR
 | **Async** | Request-response; long tasks time out | **Async-first**: Streamable HTTP / NDJSON |
 | **Integration** | Requires MCP SDKs/servers | **Zero-package**: standard HTTP + JSON |
 
-**SWP is the GPS.** The server tells the agent: *You are here; these are the only valid next actions.*
+**SCP is the GPS.** The server tells the agent: *You are here; these are the only valid next actions.*
 
 → **[Full documentation](docs/README.md)** — detailed docs for every feature below. **[Contributing](CONTRIBUTING.md)** — how to run tests and keep the spec in sync.
 
@@ -43,7 +43,7 @@ flowchart LR
 
 → **[State Frame (detailed)](docs/state-frame.md)**
 
-Every SWP response is a **State Frame**—the single source of truth for the run:
+Every SCP response is a **State Frame**—the single source of truth for the run:
 
 | Field | Purpose |
 |-------|--------|
@@ -62,9 +62,15 @@ Every SWP response is a **State Frame**—the single source of truth for the run
 
 ---
 
+## Dynamic CLIs (remote dynamic CLI feature)
+
+SCP supports a **remote dynamic CLI** feature: every server exposes **`GET /runs/{run_id}/cli`**, which returns a CLI object (prompt, hint, options) for the current state—either from workflow **hooks** (`.cli(state, ...)`) or **auto-generated** from the frame’s hint and next_states. So any client can use any SCP server as a CLI tool. Tools like **CLRUN** support **dynamic remote CLIs via SCP**: run `clrun scp <url>` to attach to an SCP server; CLRUN fetches the CLI endpoint after every status update and drives the flow in its virtual terminal. See **[Dynamic CLI (detailed)](docs/dynamic-cli.md)**.
+
+---
+
 ## Stage Integrations (Tools & Resources)
 
-Where does **integration/tool/resource logic** run? In SWP it lives in **stage-bound handlers** you register on the workflow—similar in spirit to MCP tools and resources, but scoped by the FSM.
+Where does **integration/tool/resource logic** run? In SCP it lives in **stage-bound handlers** you register on the workflow—similar in spirit to MCP tools and resources, but scoped by the FSM.
 
 - **Tools**: Callable in a state. The agent `POST`s to the tool’s `href` with an optional body; the server runs the **handler** you registered for that state and tool, and returns `{ result }`. Only valid when the current state lists that tool in `tools`.
 - **Resources**: Read-only content in a state. The agent `GET`s a resource `uri`; the server runs the **handler** you registered for that state and path, and returns the content. Only valid when the state lists that resource in `resources`.
@@ -80,7 +86,7 @@ def run_linter(run_id: str, run_record: dict, body: dict):
     return {"passed": True, "issues": 0}
 
 workflow = (
-    SWPWorkflow("my-wf", "INIT", transitions)
+    SCPWorkflow("my-wf", "INIT", transitions)
     .hint("LINT", "Run the linter, then transition with lint_done.")
     .tool("LINT", "run_linter", run_linter, description="Run linter", expects={"paths": "array"})
 )
@@ -102,7 +108,7 @@ workflow
 
 ## Agent Skills
 
-SWP integrates with the [Open Agent Skill](https://cursor.com/docs/agents/skills) spec. When a State Frame includes `active_skill`, the client:
+SCP integrates with the [Open Agent Skill](https://cursor.com/docs/agents/skills) spec. When a State Frame includes `active_skill`, the client:
 
 1. Fetches the skill from `active_skill.url` (e.g. a SKILL.md).
 2. Injects its content into the LLM system message or history.
@@ -137,12 +143,12 @@ cd sdks/python && pip install -e . && pip install uvicorn
 ```
 
 ```python
-from swp import SWPWorkflow, TransitionDef, create_app
+from scp import SCPWorkflow, TransitionDef, create_app
 
 transitions = [
     TransitionDef(from_state="INIT", action="start", to_state="DONE"),
 ]
-workflow = SWPWorkflow("my-wf", "INIT", transitions).hint("INIT", "Start here.")
+workflow = SCPWorkflow("my-wf", "INIT", transitions).hint("INIT", "Start here.")
 app = create_app(workflow)
 # Run: uvicorn app:app --reload
 ```
@@ -154,10 +160,10 @@ cd sdks/typescript && npm install && npm run build
 ```
 
 ```typescript
-import { createApp, SWPWorkflow } from "./src/index.js";
+import { createApp, SCPWorkflow } from "./src/index.js";
 
 const transitions = [{ from_state: "INIT", action: "start", to_state: "DONE" }];
-const workflow = new SWPWorkflow("my-wf", "INIT", transitions).hint("INIT", "Start here.");
+const workflow = new SCPWorkflow("my-wf", "INIT", transitions).hint("INIT", "Start here.");
 const app = createApp(workflow);
 // Serve with @hono/node-server or your adapter
 ```
@@ -184,12 +190,12 @@ curl -X POST http://localhost:8000/runs/<run_id>/transitions/start -H "Content-T
 The FSM, transitions, tools, resources, and **streamable HTTP (NDJSON)** run with **no Hono dependency**. Use `createFetchHandler` on Cloudflare Workers, Supabase Edge Functions, Convex HTTP, or any `fetch`-based runtime:
 
 ```typescript
-import { createFetchHandler, SWPWorkflow, InMemoryStore } from "swp-sdk";
+import { createFetchHandler, SCPWorkflow, InMemoryStore } from "scp-sdk";
 
-const workflow = new SWPWorkflow("my-wf", "INIT", transitions, "https://your-worker.workers.dev")
+const workflow = new SCPWorkflow("my-wf", "INIT", transitions, "https://your-worker.workers.dev")
   .hint("INIT", "Start").hint("DONE", "Done");
 const store = new InMemoryStore();
-const handle = createFetchHandler(workflow, store, { basePath: "/api/swp" }); // optional basePath
+const handle = createFetchHandler(workflow, store, { basePath: "/api/scp" }); // optional basePath
 
 // Workers: export default { fetch: handle };
 // Supabase/Convex: use handle(req) as your HTTP handler.
@@ -206,13 +212,13 @@ Same protocol (discovery, runs, transitions, invoke, resources, GET stream). Str
 Clients can run an **in-memory FSM** with no server. Use one or many backends in parallel (local + remote):
 
 ```typescript
-import { SWPClient, LocalSWPBackend, SWPWorkflow } from "swp-sdk";
+import { SCPClient, LocalSCPBackend, SCPWorkflow } from "scp-sdk";
 
-const workflow = new SWPWorkflow("local-wf", "INIT", transitions, "memory:")
+const workflow = new SCPWorkflow("local-wf", "INIT", transitions, "memory:")
   .hint("INIT", "Start").tool("LINT", "run_lint", (id, rec, body) => ({ passed: true }));
 
-const localBackend = new LocalSWPBackend(workflow, {});
-const client = new SWPClient(localBackend);  // or new SWPClient("https://api.example.com") for HTTP
+const localBackend = new LocalSCPBackend(workflow, {});
+const client = new SCPClient(localBackend);  // or new SCPClient("https://api.example.com") for HTTP
 
 const frame = await client.startRun();
 await client.transition("start");
@@ -220,7 +226,7 @@ const result = await client.invokeTool("run_lint", {});
 for await (const chunk of client.stream()) { /* NDJSON frames */ }
 ```
 
-Use **multiple clients** in parallel: e.g. `new SWPClient(remoteBackend)` and `new SWPClient(localBackend)` so the agent can drive both a remote workflow and a local one.
+Use **multiple clients** in parallel: e.g. `new SCPClient(remoteBackend)` and `new SCPClient(localBackend)` so the agent can drive both a remote workflow and a local one.
 
 ---
 
@@ -234,9 +240,9 @@ Servers are defined in a **JSON config** (from file or agent context). **Local F
 
 | | **Server (HTTP)** | **Local FSM (embedded)** |
 |---|-------------------|---------------------------|
-| What | SWP server at a URL (remote or `http://localhost:PORT`) | In-memory workflow + store; no server process |
+| What | SCP server at a URL (remote or `http://localhost:PORT`) | In-memory workflow + store; no server process |
 | In config? | Yes: `servers[].base_url` | No—programmatic only |
-| Add at runtime | `registry.addServer(id, baseUrl)` | `registry.addLocalFsm(id, LocalSWPBackend(...))` |
+| Add at runtime | `registry.addServer(id, baseUrl)` | `registry.addLocalFsm(id, LocalSCPBackend(...))` |
 | `listServers()[].type` | `"http"` | `"embedded"` |
 
 **Config shape** (see `spec/CLIENT_CONFIG.json`):
@@ -250,15 +256,15 @@ Servers are defined in a **JSON config** (from file or agent context). **Local F
 }
 ```
 
-Use **`SWPClientRegistry`** to load this config and obtain clients by id. Add **in-memory FSMs** with `localFsms` / `addLocalFsm`. The agent can **dynamically add** server URLs (e.g. from a skill or CLI):
+Use **`SCPClientRegistry`** to load this config and obtain clients by id. Add **in-memory FSMs** with `localFsms` / `addLocalFsm`. The agent can **dynamically add** server URLs (e.g. from a skill or CLI):
 
 ```typescript
-import { SWPClientRegistry, LocalSWPBackend, SWPWorkflow } from "swp-sdk";
+import { SCPClientRegistry, LocalSCPBackend, SCPWorkflow } from "scp-sdk";
 
-const registry = new SWPClientRegistry({
+const registry = new SCPClientRegistry({
   config: jsonConfigOrString,           // servers (remote or localhost)
   localFsms: {                          // in-memory FSMs only; no server
-    myFsm: new LocalSWPBackend(workflow, {}),
+    myFsm: new LocalSCPBackend(workflow, {}),
   },
 });
 
@@ -277,18 +283,18 @@ await client.startRun();
 |------|-------------|
 | `docs/` | **Detailed docs** for every feature: [docs/README.md](docs/README.md) |
 | `spec/` | PROTOCOL.md, STATE_FRAME.json, CLIENT_CONFIG.json, STAGE_INTEGRATIONS.md, SKILL_INTEGRATION.md |
-| `sdks/python/` | FastAPI server, Pydantic models, SWPClient, LLM wrapper, visualizer |
-| `sdks/typescript/` | Hono server, Zod models, SWPClient, LLM wrapper, visualizer |
+| `sdks/python/` | FastAPI server, Pydantic models, SCPClient, LLM wrapper, visualizer |
+| `sdks/typescript/` | Hono server, Zod models, SCPClient, LLM wrapper, visualizer |
 | `skills/` | Example Agent Skills (SKILL.md) for audit, upload, approval, lint |
 | `examples/` | legal-review-flow (Python), ci-cd-bot (TypeScript) |
 | `tests/` | Python (pytest) in `tests/python/`; TypeScript (Vitest) in `sdks/typescript/tests/` |
 | `scripts/` | `check_openapi_sync.py` — verifies Python OpenAPI copy matches spec |
 
-**Agent integration tests:** Optional tests run a small AI agent (OpenAI mini) that uses the SWP client to drive a workflow. They are skipped unless `OPENAI_API_KEY` is set. Run them with:
-- **Python:** `pip install -e ".[dev]"` (includes `openai`), then `OPENAI_API_KEY=sk-... pytest tests/python/test_agent_swp.py -v`
+**Agent integration tests:** Optional tests run a small AI agent (OpenAI mini) that uses the SCP client to drive a workflow. They are skipped unless `OPENAI_API_KEY` is set. Run them with:
+- **Python:** `pip install -e ".[dev]"` (includes `openai`), then `OPENAI_API_KEY=sk-... pytest tests/python/test_agent_scp.py -v`
 - **TypeScript:** `OPENAI_API_KEY=sk-... npm test` (in `sdks/typescript`; the agent test is skipped when the key is missing).
 
-**OpenAPI single source:** The canonical API spec is **`spec/openapi.json`**. When you change the API, update that file first; then sync the Python copy (`cp spec/openapi.json sdks/python/swp/openapi.json`) and the TypeScript server’s `sdks/typescript/src/openapi-spec.ts`. Run **`python scripts/check_openapi_sync.py`** to verify the Python copy matches the spec (use in CI to enforce sync).
+**OpenAPI single source:** The canonical API spec is **`spec/openapi.json`**. When you change the API, update that file first; then sync the Python copy (`cp spec/openapi.json sdks/python/scp/openapi.json`) and the TypeScript server’s `sdks/typescript/src/openapi-spec.ts`. Run **`python scripts/check_openapi_sync.py`** to verify the Python copy matches the spec (use in CI to enforce sync).
 
 **SDK conventions:** Python uses **snake_case** for method and parameter names (e.g. `run_id`, `get_frame`, `start_run`); TypeScript uses **camelCase** (e.g. `runId`, `getFrame`, `startRun`). Same protocol, different style per language.
 

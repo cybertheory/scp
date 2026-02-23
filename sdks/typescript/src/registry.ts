@@ -7,36 +7,36 @@
  * **Migration:** `localBackends` and `addLocal()` are deprecated in favor of `localFsms` and `addLocalFsm()`.
  * They remain supported for backward compatibility and will be removed in the next major (v2.0.0).
  */
-import type { SWPClientConfig, SWPServerEntry } from "./config.js";
-import { parseSWPClientConfig } from "./config.js";
-import type { SWPBackend } from "./local.js";
-import { HttpSWPBackend } from "./backend-http.js";
-import { SWPClient } from "./client.js";
+import type { SCPClientConfig, SCPServerEntry } from "./config.js";
+import { parseSCPClientConfig } from "./config.js";
+import type { SCPBackend } from "./local.js";
+import { HttpSCPBackend } from "./backend-http.js";
+import { SCPClient } from "./client.js";
 
 export type ServerInfo = {
   id: string;
-  /** "http" = SWP server (remote or localhost). "embedded" = in-memory FSM, no server. */
+  /** "http" = SCP server (remote or localhost). "embedded" = in-memory FSM, no server. */
   type: "http" | "embedded";
   base_url?: string;
 };
 
 /**
- * Registry of SWP clients: from config (servers list), programmatic local FSMs (in-memory),
- * and dynamically added servers. Use getClient(id) to get an SWPClient and run through a FSM.
+ * Registry of SCP clients: from config (servers list), programmatic local FSMs (in-memory),
+ * and dynamically added servers. Use getClient(id) to get an SCPClient and run through a FSM.
  */
-export class SWPClientRegistry {
-  private clients = new Map<string, SWPClient>();
+export class SCPClientRegistry {
+  private clients = new Map<string, SCPClient>();
   private serverInfo = new Map<string, ServerInfo>();
   private timeout: number;
 
   constructor(
     options: {
       /** Initial config (JSON object or string). Servers become HTTP clients (remote or localhost). */
-      config?: SWPClientConfig | string;
+      config?: SCPClientConfig | string;
       /** In-memory FSMs only (no server). Keyed by id. Not definable in JSON config. */
-      localFsms?: Record<string, SWPBackend>;
+      localFsms?: Record<string, SCPBackend>;
       /** @deprecated Use localFsms. In-memory FSMs (no server). Will be removed in v2.0.0. */
-      localBackends?: Record<string, SWPBackend>;
+      localBackends?: Record<string, SCPBackend>;
       timeout?: number;
     } = {}
   ) {
@@ -45,7 +45,7 @@ export class SWPClientRegistry {
     if (options.config != null) {
       const config =
         typeof options.config === "string"
-          ? parseSWPClientConfig(options.config)
+          ? parseSCPClientConfig(options.config)
           : options.config;
       this.addConfig(config);
     }
@@ -59,9 +59,9 @@ export class SWPClientRegistry {
   }
 
   /** Load servers from a discovery config (e.g. from file or agent context). */
-  addConfig(config: SWPClientConfig | string): void {
+  addConfig(config: SCPClientConfig | string): void {
     const parsed =
-      typeof config === "string" ? parseSWPClientConfig(config) : config;
+      typeof config === "string" ? parseSCPClientConfig(config) : config;
     if (!parsed.servers) return;
     for (const entry of parsed.servers) {
       const id = entry.id ?? entry.base_url;
@@ -70,12 +70,12 @@ export class SWPClientRegistry {
   }
 
   /**
-   * Dynamically add an SWP server by URL (remote or local—e.g. http://localhost:3000).
+   * Dynamically add an SCP server by URL (remote or local—e.g. http://localhost:3000).
    * Use for URLs from a skill, agent context, or an external CLI that started a server.
    */
   addServer(id: string, baseUrl: string): void {
-    const backend = new HttpSWPBackend(baseUrl, this.timeout);
-    this.clients.set(id, new SWPClient(backend));
+    const backend = new HttpSCPBackend(baseUrl, this.timeout);
+    this.clients.set(id, new SCPClient(backend));
     this.serverInfo.set(id, { id, type: "http", base_url: baseUrl });
   }
 
@@ -83,25 +83,25 @@ export class SWPClientRegistry {
    * Add an in-memory FSM (no server). Must be supplied programmatically; not definable in JSON config.
    * The client interacts with the workflow and store directly—no HTTP.
    */
-  addLocalFsm(id: string, backend: SWPBackend): void {
-    this.clients.set(id, new SWPClient(backend));
+  addLocalFsm(id: string, backend: SCPBackend): void {
+    this.clients.set(id, new SCPClient(backend));
     this.serverInfo.set(id, { id, type: "embedded" });
   }
 
   /** @deprecated Use addLocalFsm. Add an in-memory FSM (no server). Will be removed in v2.0.0. */
-  addLocal(id: string, backend: SWPBackend): void {
+  addLocal(id: string, backend: SCPBackend): void {
     this.addLocalFsm(id, backend);
   }
 
-  /** Get an SWPClient for the given server or local FSM id. Returns null if not found. */
-  getClient(id: string): SWPClient | null {
+  /** Get an SCPClient for the given server or local FSM id. Returns null if not found. */
+  getClient(id: string): SCPClient | null {
     return this.clients.get(id) ?? null;
   }
 
   /** Require a client; throws if id is not registered. */
-  requireClient(id: string): SWPClient {
+  requireClient(id: string): SCPClient {
     const c = this.clients.get(id);
-    if (!c) throw new Error(`SWP client '${id}' not found. Known: ${this.listServerIds().join(", ") || "(none)"}`);
+    if (!c) throw new Error(`SCP client '${id}' not found. Known: ${this.listServerIds().join(", ") || "(none)"}`);
     return c;
   }
 

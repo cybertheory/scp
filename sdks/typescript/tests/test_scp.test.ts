@@ -1,5 +1,5 @@
 /**
- * Tests for SWP TypeScript SDK. Run from sdks/typescript: npm test
+ * Tests for SCP TypeScript SDK. Run from sdks/typescript: npm test
  */
 import { readdirSync, mkdtempSync, writeFileSync, rmSync } from "fs";
 import { join } from "path";
@@ -8,11 +8,11 @@ import { describe, it, expect } from "vitest";
 import {
   createApp,
   createFetchHandler,
-  SWPWorkflow,
-  SWPClient,
-  LocalSWPBackend,
-  SWPClientRegistry,
-  parseSWPClientConfig,
+  SCPWorkflow,
+  SCPClient,
+  LocalSCPBackend,
+  SCPClientRegistry,
+  parseSCPClientConfig,
   visualizeFsm,
   type TransitionDef,
 } from "../src/index.js";
@@ -23,9 +23,9 @@ const transitions: TransitionDef[] = [
   { from_state: "INIT", action: "start", to_state: "DONE" },
 ];
 
-describe("SWP Workflow", () => {
+describe("SCP Workflow", () => {
   it("builds frame with next_states", () => {
-    const w = new SWPWorkflow("wf1", "INIT", transitions, "http://localhost:3000");
+    const w = new SCPWorkflow("wf1", "INIT", transitions, "http://localhost:3000");
     w.hint("INIT", "Start here.");
     const frame = w.buildFrame("run-123", "INIT");
     expect(frame.run_id).toBe("run-123");
@@ -41,7 +41,7 @@ describe("SWP Workflow", () => {
       { from_state: "A", action: "x", to_state: "B" },
       { from_state: "A", action: "y", to_state: "C" },
     ];
-    const w = new SWPWorkflow("wf1", "A", ts);
+    const w = new SCPWorkflow("wf1", "A", ts);
     expect(w.getTransition("A", "x")?.to_state).toBe("B");
     expect(w.getTransition("A", "z")).toBeNull();
   });
@@ -61,9 +61,9 @@ describe("visualizeFsm", () => {
   });
 });
 
-describe("SWP Server + Client", () => {
+describe("SCP Server + Client", () => {
   const store: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
-  const w = new SWPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done");
+  const w = new SCPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done");
   const app = createApp(w, store);
 
   it("POST /runs returns 201 and frame", async () => {
@@ -130,7 +130,7 @@ describe("SWP Server + Client", () => {
     const ts: TransitionDef[] = [
       { from_state: "INIT", action: "go", to_state: "DONE", expects: { a: "string", n: "number" }, is_critical: false },
     ];
-    const w = new SWPWorkflow("test-wf", "INIT", ts, "http://localhost").hint("INIT", "S").hint("DONE", "D");
+    const w = new SCPWorkflow("test-wf", "INIT", ts, "http://localhost").hint("INIT", "S").hint("DONE", "D");
     const store: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
     const app = createApp(w, store);
     const postRes = await app.request("http://localhost/runs", {
@@ -164,7 +164,7 @@ describe("SWP Server + Client", () => {
     expect(res.status).toBe(200);
     const data = (await res.json()) as { openapi: string; info: { title: string; "x-workflow-id"?: string }; paths: object; components: { schemas: object } };
     expect(data.openapi).toBe("3.0.3");
-    expect(data.info.title).toContain("Stateful Workflow Protocol");
+    expect(data.info.title).toContain("Structured Command Protocol");
     expect(data.info["x-workflow-id"]).toBe("test-wf");
     expect(data.paths).toHaveProperty("/runs");
     expect(data.components.schemas).toHaveProperty("StateFrame");
@@ -178,12 +178,71 @@ describe("SWP Server + Client", () => {
     expect(data.hint).toContain("Run not found");
   });
 
+  it("GET /runs/:id/cli returns 200 with auto-generated CLI (snake_case) for valid run", async () => {
+    const post = await app.request("http://localhost/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const { run_id } = (await post.json()) as { run_id: string };
+    const res = await app.request(`http://localhost/runs/${run_id}/cli`);
+    expect(res.status).toBe(200);
+    const cli = (await res.json()) as { prompt?: string; hint?: string; options?: { action: string; label: string }[] };
+    expect(cli.prompt).toBe("Choose an action");
+    expect(cli.hint).toBe("Start");
+    expect(cli.options).toHaveLength(1);
+    expect(cli.options![0].action).toBe("start");
+    expect(cli.options![0].label).toBe("start");
+  });
+
+  it("GET /runs/:id/cli returns 404 for unknown run", async () => {
+    const res = await app.request("http://localhost/runs/nonexistent-run-id/cli");
+    expect(res.status).toBe(404);
+    const data = (await res.json()) as { hint: string };
+    expect(data.hint).toBeDefined();
+  });
+
+  it("GET /runs/:id/cli with .cli() hook returns custom prompt, hint, and labels", async () => {
+    const tsWithCli: TransitionDef[] = [
+      { from_state: "INIT", action: "start", to_state: "DONE", is_critical: false },
+      { from_state: "INIT", action: "skip", to_state: "DONE", is_critical: false },
+    ];
+    const w = new SCPWorkflow("wf-cli", "INIT", tsWithCli, "http://localhost")
+      .hint("INIT", "Start or skip.")
+      .hint("DONE", "Done")
+      .cli("INIT", {
+        prompt: "What do you want to do?",
+        hint: "Pick start or skip.",
+        options: [
+          { action: "start", label: "Start workflow", keys: "1" },
+          { action: "skip", label: "Skip", keys: "2" },
+        ],
+      });
+    const storeCli: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
+    const appCli = createApp(w, storeCli);
+    const post = await appCli.request("http://localhost/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const { run_id } = (await post.json()) as { run_id: string };
+    const res = await appCli.request(`http://localhost/runs/${run_id}/cli`);
+    expect(res.status).toBe(200);
+    const cli = (await res.json()) as { prompt?: string; hint?: string; options?: { action: string; label: string; keys?: string }[] };
+    expect(cli.prompt).toBe("What do you want to do?");
+    expect(cli.hint).toBe("Pick start or skip.");
+    expect(cli.options).toHaveLength(2);
+    expect(cli.options!.find((o) => o.action === "start")?.label).toBe("Start workflow");
+    expect(cli.options!.find((o) => o.action === "start")?.keys).toBe("1");
+    expect(cli.options!.find((o) => o.action === "skip")?.label).toBe("Skip");
+  });
+
   it("GET / discovery returns all next_states for initial state", async () => {
     const ts: TransitionDef[] = [
       { from_state: "INIT", action: "start", to_state: "DONE", is_critical: false },
       { from_state: "INIT", action: "skip", to_state: "DONE", is_critical: false },
     ];
-    const w = new SWPWorkflow("test-wf", "INIT", ts, "http://localhost").hint("INIT", "S").hint("DONE", "D");
+    const w = new SCPWorkflow("test-wf", "INIT", ts, "http://localhost").hint("INIT", "S").hint("DONE", "D");
     const store: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
     const app = createApp(w, store);
     const res = await app.request("http://localhost/");
@@ -221,7 +280,7 @@ describe("Stage integrations (tools and resources) – logic executes when stepp
 
   it("buildFrame includes tools and resources only for the state that declares them", () => {
     const toolCalls: Array<{ run_id: string; state: string; body: unknown }> = [];
-    const w = new SWPWorkflow("wf", "A", [{ from_state: "A", action: "go", to_state: "B" }], "http://test")
+    const w = new SCPWorkflow("wf", "A", [{ from_state: "A", action: "go", to_state: "B" }], "http://test")
       .tool("A", "my_tool", (rid, rec, body) => {
         toolCalls.push({ run_id: rid, state: rec.state, body });
         return {};
@@ -244,7 +303,7 @@ describe("Stage integrations (tools and resources) – logic executes when stepp
 
   it("invoke tool executes handler and returns result when in correct state", async () => {
     const toolCalls: Array<{ run_id: string; state: string; body: Record<string, unknown> }> = [];
-    const w = new SWPWorkflow("stage-wf", "INIT", stageTransitions, "http://localhost")
+    const w = new SCPWorkflow("stage-wf", "INIT", stageTransitions, "http://localhost")
       .hint("INIT", "Start")
       .hint("LINT", "Run linter")
       .hint("DONE", "Done")
@@ -301,7 +360,7 @@ describe("Stage integrations (tools and resources) – logic executes when stepp
 
   it("read resource executes handler and returns content when in correct state", async () => {
     const resourceCalls: Array<{ run_id: string; state: string }> = [];
-    const w = new SWPWorkflow("stage-wf", "INIT", stageTransitions, "http://localhost")
+    const w = new SCPWorkflow("stage-wf", "INIT", stageTransitions, "http://localhost")
       .hint("INIT", "Start")
       .hint("LINT", "Run linter")
       .hint("DONE", "Done")
@@ -349,7 +408,7 @@ describe("Stage integrations (tools and resources) – logic executes when stepp
 
   it("invoke tool returns 403 when not in state that declares the tool", async () => {
     const toolCalls: Array<unknown> = [];
-    const w = new SWPWorkflow("stage-wf", "INIT", stageTransitions, "http://localhost")
+    const w = new SCPWorkflow("stage-wf", "INIT", stageTransitions, "http://localhost")
       .hint("INIT", "Start")
       .hint("LINT", "Run linter")
       .tool("LINT", "run_linter", () => {
@@ -379,7 +438,7 @@ describe("Stage integrations (tools and resources) – logic executes when stepp
 
   it("invoke tool returns 403 after transitioning away from state", async () => {
     const toolCalls: Array<unknown> = [];
-    const w = new SWPWorkflow("stage-wf", "INIT", stageTransitions, "http://localhost")
+    const w = new SCPWorkflow("stage-wf", "INIT", stageTransitions, "http://localhost")
       .hint("INIT", "Start")
       .hint("LINT", "Run linter")
       .hint("DONE", "Done")
@@ -414,7 +473,7 @@ describe("Stage integrations (tools and resources) – logic executes when stepp
 
   it("read resource returns 403 when not in state that declares the resource", async () => {
     const resourceCalls: Array<unknown> = [];
-    const w = new SWPWorkflow("stage-wf", "INIT", stageTransitions, "http://localhost")
+    const w = new SCPWorkflow("stage-wf", "INIT", stageTransitions, "http://localhost")
       .hint("INIT", "Start")
       .resource("LINT", "lint-report", () => {
         resourceCalls.push(1);
@@ -437,7 +496,7 @@ describe("Stage integrations (tools and resources) – logic executes when stepp
 
   it("full FSM step-through: start -> LINT -> invoke tool -> transition -> DONE, tool no longer available", async () => {
     const toolCalls: Array<unknown> = [];
-    const w = new SWPWorkflow("stage-wf", "INIT", stageTransitions, "http://localhost")
+    const w = new SCPWorkflow("stage-wf", "INIT", stageTransitions, "http://localhost")
       .hint("INIT", "Start")
       .hint("LINT", "Run linter")
       .hint("DONE", "Done")
@@ -518,7 +577,7 @@ describe("Example business logic – tool runs real logic and stores in run data
 
   it("invoke tool runs real file-count logic and stores result in run data", async () => {
     const store: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
-    const w = new SWPWorkflow("ci-wf", "INIT", transitions, "http://localhost")
+    const w = new SCPWorkflow("ci-wf", "INIT", transitions, "http://localhost")
       .hint("INIT", "Start")
       .hint("LINT", "Lint")
       .tool("LINT", "run_lint_check", runLintCheckHandler, {
@@ -527,7 +586,7 @@ describe("Example business logic – tool runs real logic and stores in run data
       });
     const app = createApp(w, store);
 
-    const tmp = mkdtempSync(join(tmpdir(), "swp-lint-"));
+    const tmp = mkdtempSync(join(tmpdir(), "scp-lint-"));
     try {
       writeFileSync(join(tmp, "a.ts"), "export {};\n");
       writeFileSync(join(tmp, "b.ts"), "export {};\n");
@@ -567,12 +626,66 @@ describe("Example business logic – tool runs real logic and stores in run data
   });
 });
 
+describe("Client CLI mode (getCli) – step through to end state", () => {
+  const ts: TransitionDef[] = [
+    { from_state: "INIT", action: "start", to_state: "DONE", is_critical: false },
+  ];
+
+  it("LocalSCPBackend: getCli after startRun returns options; after transition to DONE returns terminal state", async () => {
+    const w = new SCPWorkflow("cli-wf", "INIT", ts, "memory:")
+      .hint("INIT", "Start here.")
+      .hint("DONE", "Done.");
+    const backend = new LocalSCPBackend(w, {});
+    const client = new SCPClient(backend);
+    const frame0 = await client.startRun();
+    expect(frame0.state).toBe("INIT");
+    const cli0 = await client.getCli(frame0.run_id);
+    expect(cli0.prompt).toBe("Choose an action");
+    expect(cli0.hint).toBe("Start here.");
+    expect(cli0.options).toHaveLength(1);
+    expect(cli0.options![0].action).toBe("start");
+
+    await client.transition("start", undefined, frame0.run_id);
+    const frame1 = await client.getFrame(frame0.run_id);
+    expect(frame1.state).toBe("DONE");
+    const cli1 = await client.getCli(frame0.run_id);
+    expect(cli1.options).toEqual([]);
+    expect(frame1.status).toBe("active");
+  });
+
+  it("HTTP app: SCPClient getFrame + getCli + transition steps through to DONE", async () => {
+    const store: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
+    const port = 18768;
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const w = new SCPWorkflow("http-cli-wf", "INIT", ts, baseUrl).hint("INIT", "Go").hint("DONE", "Done.");
+    const app = createApp(w, store);
+    const { serve } = await import("@hono/node-server");
+    const server = serve({ fetch: app.fetch, port, hostname: "127.0.0.1" });
+    try {
+      const client = new SCPClient(baseUrl);
+      const frame0 = await client.startRun();
+      expect(frame0.state).toBe("INIT");
+      const cli0 = await client.getCli();
+      expect(cli0.options).toHaveLength(1);
+      expect(cli0.options![0].action).toBe("start");
+
+      await client.transition("start", undefined, frame0.run_id);
+      const frame1 = await client.getFrame();
+      const cli1 = await client.getCli();
+      expect(frame1.state).toBe("DONE");
+      expect(cli1.options?.length).toBe(0);
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  });
+});
+
 describe("createFetchHandler – server-agnostic (Workers/Supabase/Convex)", () => {
   const ts: TransitionDef[] = [
     { from_state: "INIT", action: "start", to_state: "DONE", is_critical: false },
   ];
   const store: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
-  const w = new SWPWorkflow("fetch-wf", "INIT", ts, "http://localhost").hint("INIT", "Start").hint("DONE", "Done");
+  const w = new SCPWorkflow("fetch-wf", "INIT", ts, "http://localhost").hint("INIT", "Start").hint("DONE", "Done");
   const handle = createFetchHandler(w, store);
 
   it("GET / returns discovery frame with run_id and next_states", async () => {
@@ -623,21 +736,21 @@ describe("createFetchHandler – server-agnostic (Workers/Supabase/Convex)", () 
   });
 });
 
-describe("LocalSWPBackend – client-side FSM (no server)", () => {
+describe("LocalSCPBackend – client-side FSM (no server)", () => {
   const ts: TransitionDef[] = [
     { from_state: "INIT", action: "start", to_state: "LINT", is_critical: false },
     { from_state: "LINT", action: "done", to_state: "DONE", is_critical: false },
   ];
-  const w = new SWPWorkflow("local-wf", "INIT", ts, "memory:")
+  const w = new SCPWorkflow("local-wf", "INIT", ts, "memory:")
     .hint("INIT", "Start")
     .hint("LINT", "Lint")
     .hint("DONE", "Done")
     .tool("LINT", "t", (_id, _r, body) => ({ n: (body?.n as number) ?? 0 }), { description: "Tool" })
     .resource("LINT", "r", () => "resource-content", { name: "R", mime_type: "text/plain" });
 
-  it("client with LocalSWPBackend runs FSM locally", async () => {
-    const backend = new LocalSWPBackend(w, {});
-    const client = new SWPClient(backend);
+  it("client with LocalSCPBackend runs FSM locally", async () => {
+    const backend = new LocalSCPBackend(w, {});
+    const client = new SCPClient(backend);
     const frame0 = await client.startRun({ foo: "bar" });
     expect(frame0.run_id).toBeDefined();
     expect(frame0.state).toBe("INIT");
@@ -656,8 +769,8 @@ describe("LocalSWPBackend – client-side FSM (no server)", () => {
   });
 
   it("stream yields frames locally", async () => {
-    const backend = new LocalSWPBackend(w, {});
-    const client = new SWPClient(backend);
+    const backend = new LocalSCPBackend(w, {});
+    const client = new SCPClient(backend);
     const frame0 = await client.startRun();
     await client.transition("start", undefined, frame0.run_id);
     const chunks: Record<string, unknown>[] = [];
@@ -668,8 +781,8 @@ describe("LocalSWPBackend – client-side FSM (no server)", () => {
 });
 
 describe("Client discovery config (JSON, MCP-style) and registry", () => {
-  it("parseSWPClientConfig accepts object with servers array", () => {
-    const config = parseSWPClientConfig({
+  it("parseSCPClientConfig accepts object with servers array", () => {
+    const config = parseSCPClientConfig({
       servers: [
         { id: "legal", base_url: "https://api.example.com/legal" },
         { base_url: "https://other.com" },
@@ -680,20 +793,20 @@ describe("Client discovery config (JSON, MCP-style) and registry", () => {
     expect(config.servers![1].id).toBeUndefined();
   });
 
-  it("parseSWPClientConfig accepts JSON string", () => {
-    const config = parseSWPClientConfig('{"servers":[{"base_url":"https://x.com"}]}');
+  it("parseSCPClientConfig accepts JSON string", () => {
+    const config = parseSCPClientConfig('{"servers":[{"base_url":"https://x.com"}]}');
     expect(config.servers).toHaveLength(1);
     expect(config.servers![0].base_url).toBe("https://x.com");
   });
 
-  it("parseSWPClientConfig throws on invalid", () => {
-    expect(() => parseSWPClientConfig("")).toThrow();
-    expect(() => parseSWPClientConfig({ servers: "not-array" })).toThrow();
-    expect(() => parseSWPClientConfig({ servers: [{}] })).toThrow();
+  it("parseSCPClientConfig throws on invalid", () => {
+    expect(() => parseSCPClientConfig("")).toThrow();
+    expect(() => parseSCPClientConfig({ servers: "not-array" })).toThrow();
+    expect(() => parseSCPClientConfig({ servers: [{}] })).toThrow();
   });
 
   it("registry from config creates clients for each server", () => {
-    const registry = new SWPClientRegistry({
+    const registry = new SCPClientRegistry({
       config: {
         servers: [
           { id: "a", base_url: "https://a.com" },
@@ -704,50 +817,50 @@ describe("Client discovery config (JSON, MCP-style) and registry", () => {
     expect(registry.listServerIds()).toContain("a");
     expect(registry.listServerIds()).toContain("https://b.com");
     expect(registry.listServers().every((s) => s.type === "http")).toBe(true);
-    expect(registry.getClient("a")).toBeInstanceOf(SWPClient);
-    expect(registry.getClient("https://b.com")).toBeInstanceOf(SWPClient);
+    expect(registry.getClient("a")).toBeInstanceOf(SCPClient);
+    expect(registry.getClient("https://b.com")).toBeInstanceOf(SCPClient);
   });
 
   it("registry localFsms adds in-memory FSM (no server); type is embedded", () => {
     const ts = [{ from_state: "INIT", action: "go", to_state: "DONE", is_critical: false }];
-    const w = new SWPWorkflow("local", "INIT", ts, "memory:").hint("INIT", "Start").hint("DONE", "Done");
-    const registry = new SWPClientRegistry({
-      localFsms: { local1: new LocalSWPBackend(w, {}) },
+    const w = new SCPWorkflow("local", "INIT", ts, "memory:").hint("INIT", "Start").hint("DONE", "Done");
+    const registry = new SCPClientRegistry({
+      localFsms: { local1: new LocalSCPBackend(w, {}) },
     });
     expect(registry.listServers()).toHaveLength(1);
     expect(registry.listServers()[0].type).toBe("embedded");
     expect(registry.listServers()[0].id).toBe("local1");
     expect(registry.listServers()[0].base_url).toBeUndefined();
     const client = registry.getClient("local1");
-    expect(client).toBeInstanceOf(SWPClient);
+    expect(client).toBeInstanceOf(SCPClient);
   });
 
   it("local server (localhost) is addServer with type http, not embedded", () => {
-    const registry = new SWPClientRegistry({});
+    const registry = new SCPClientRegistry({});
     registry.addServer("ci-cd-local", "http://localhost:3000");
     const info = registry.listServers()[0];
     expect(info.type).toBe("http");
     expect(info.base_url).toBe("http://localhost:3000");
   });
 
-  it("registry addServer allows agent to dynamically add SWP URL", () => {
-    const registry = new SWPClientRegistry({
+  it("registry addServer allows agent to dynamically add SCP URL", () => {
+    const registry = new SCPClientRegistry({
       config: { servers: [{ id: "pre", base_url: "https://pre.com" }] },
     });
     expect(registry.listServerIds()).toEqual(["pre"]);
-    registry.addServer("from-skill", "https://skill-provided.com/swp");
+    registry.addServer("from-skill", "https://skill-provided.com/scp");
     registry.addServer("cli", "http://localhost:9999");
     expect(registry.listServerIds()).toContain("pre");
     expect(registry.listServerIds()).toContain("from-skill");
     expect(registry.listServerIds()).toContain("cli");
-    expect(registry.getClient("from-skill")).toBeInstanceOf(SWPClient);
-    expect(registry.listServers().find((s) => s.id === "from-skill")?.base_url).toBe("https://skill-provided.com/swp");
+    expect(registry.getClient("from-skill")).toBeInstanceOf(SCPClient);
+    expect(registry.listServers().find((s) => s.id === "from-skill")?.base_url).toBe("https://skill-provided.com/scp");
   });
 
   it("registry getClient + requireClient and remove", () => {
-    const registry = new SWPClientRegistry({ config: { servers: [{ id: "x", base_url: "https://x.com" }] } });
+    const registry = new SCPClientRegistry({ config: { servers: [{ id: "x", base_url: "https://x.com" }] } });
     expect(registry.getClient("missing")).toBeNull();
-    expect(registry.requireClient("x")).toBeInstanceOf(SWPClient);
+    expect(registry.requireClient("x")).toBeInstanceOf(SCPClient);
     expect(() => registry.requireClient("missing")).toThrow(/not found/);
     expect(registry.remove("x")).toBe(true);
     expect(registry.getClient("x")).toBeNull();
@@ -755,7 +868,7 @@ describe("Client discovery config (JSON, MCP-style) and registry", () => {
   });
 
   it("registry accepts timeout option", () => {
-    const registry = new SWPClientRegistry({
+    const registry = new SCPClientRegistry({
       config: { servers: [{ id: "t", base_url: "https://t.com" }] },
       timeout: 5_000,
     });
@@ -763,7 +876,7 @@ describe("Client discovery config (JSON, MCP-style) and registry", () => {
   });
 
   it("registry addConfig merges additional servers", () => {
-    const registry = new SWPClientRegistry({
+    const registry = new SCPClientRegistry({
       config: { servers: [{ id: "one", base_url: "https://one.com" }] },
     });
     expect(registry.listServerIds()).toContain("one");
@@ -773,23 +886,23 @@ describe("Client discovery config (JSON, MCP-style) and registry", () => {
   });
 
   it("registry with empty config has no servers", () => {
-    const registry = new SWPClientRegistry({ config: {} });
+    const registry = new SCPClientRegistry({ config: {} });
     expect(registry.listServerIds()).toEqual([]);
   });
 
   it("registry with config string and empty servers array", () => {
-    const registry = new SWPClientRegistry({ config: '{"servers":[]}' });
+    const registry = new SCPClientRegistry({ config: '{"servers":[]}' });
     expect(registry.listServerIds()).toEqual([]);
   });
 
   it("registry localBackends (deprecated) still registers embedded FSMs", () => {
     const ts = [{ from_state: "INIT", action: "go", to_state: "DONE", is_critical: false }];
-    const w = new SWPWorkflow("w", "INIT", ts, "memory:").hint("INIT", "X").hint("DONE", "Y");
-    const registry = new SWPClientRegistry({
-      localBackends: { legacy: new LocalSWPBackend(w, {}) },
+    const w = new SCPWorkflow("w", "INIT", ts, "memory:").hint("INIT", "X").hint("DONE", "Y");
+    const registry = new SCPClientRegistry({
+      localBackends: { legacy: new LocalSCPBackend(w, {}) },
     });
     expect(registry.listServers()[0].type).toBe("embedded");
-    expect(registry.getClient("legacy")).toBeInstanceOf(SWPClient);
+    expect(registry.getClient("legacy")).toBeInstanceOf(SCPClient);
   });
 });
 
@@ -800,7 +913,7 @@ describe("Server configuration options", () => {
 
   it("createApp with streamCallback is invoked on 202 NDJSON transition", async () => {
     const store: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
-    const w = new SWPWorkflow("wf", "INIT", ts, "http://localhost")
+    const w = new SCPWorkflow("wf", "INIT", ts, "http://localhost")
       .hint("INIT", "Start")
       .hint("DONE", "Done")
       .statusDefault("DONE", "processing");
@@ -830,9 +943,9 @@ describe("Server configuration options", () => {
 
   it("createFetchHandler with basePath strips path prefix", async () => {
     const store: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
-    const w = new SWPWorkflow("wf", "INIT", ts, "http://localhost").hint("INIT", "S").hint("DONE", "D");
-    const handle = createFetchHandler(w, store, { basePath: "/api/swp" });
-    const res = await handle(new Request("http://localhost/api/swp/runs", {
+    const w = new SCPWorkflow("wf", "INIT", ts, "http://localhost").hint("INIT", "S").hint("DONE", "D");
+    const handle = createFetchHandler(w, store, { basePath: "/api/scp" });
+    const res = await handle(new Request("http://localhost/api/scp/runs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
@@ -840,13 +953,13 @@ describe("Server configuration options", () => {
     expect(res.status).toBe(201);
     const data = (await res.json()) as { run_id: string };
     expect(data.run_id).toBeDefined();
-    const getRes = await handle(new Request(`http://localhost/api/swp/runs/${data.run_id}`));
+    const getRes = await handle(new Request(`http://localhost/api/scp/runs/${data.run_id}`));
     expect(getRes.status).toBe(200);
   });
 
   it("createFetchHandler with streamCallback is invoked on 202", async () => {
     const store: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
-    const w = new SWPWorkflow("wf", "INIT", ts, "http://localhost")
+    const w = new SCPWorkflow("wf", "INIT", ts, "http://localhost")
       .hint("INIT", "S")
       .hint("DONE", "D")
       .statusDefault("DONE", "processing");
@@ -874,7 +987,7 @@ describe("Server configuration options", () => {
   it("createApp with InMemoryStore works like plain object store", async () => {
     const { InMemoryStore } = await import("../src/index.js");
     const store = new InMemoryStore();
-    const w = new SWPWorkflow("wf", "INIT", ts, "http://localhost").hint("INIT", "S").hint("DONE", "D");
+    const w = new SCPWorkflow("wf", "INIT", ts, "http://localhost").hint("INIT", "S").hint("DONE", "D");
     const app = createApp(w, store);
     const postRes = await app.request("http://localhost/runs", {
       method: "POST",
@@ -900,9 +1013,9 @@ describe("Multiple FSM types in parallel (HTTP servers + embedded)", () => {
     const { serve } = await import("@hono/node-server");
     const storeA: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
     const storeB: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
-    const wfA = new SWPWorkflow("wf-a", "INIT", ts, `http://127.0.0.1:${PARALLEL_PORT}/wf-a`)
+    const wfA = new SCPWorkflow("wf-a", "INIT", ts, `http://127.0.0.1:${PARALLEL_PORT}/wf-a`)
       .hint("INIT", "Start A").hint("DONE", "Done A");
-    const wfB = new SWPWorkflow("wf-b", "INIT", ts, `http://127.0.0.1:${PARALLEL_PORT}/wf-b`)
+    const wfB = new SCPWorkflow("wf-b", "INIT", ts, `http://127.0.0.1:${PARALLEL_PORT}/wf-b`)
       .hint("INIT", "Start B").hint("DONE", "Done B");
     const appA = createApp(wfA, storeA);
     const appB = createApp(wfB, storeB);
@@ -920,16 +1033,16 @@ describe("Multiple FSM types in parallel (HTTP servers + embedded)", () => {
   });
 
   it("registry with two HTTP servers and one embedded FSM runs all in parallel", async () => {
-    const wfC = new SWPWorkflow("wf-c", "INIT", ts, "memory:")
+    const wfC = new SCPWorkflow("wf-c", "INIT", ts, "memory:")
       .hint("INIT", "Start C").hint("DONE", "Done C");
-    const registry = new SWPClientRegistry({
+    const registry = new SCPClientRegistry({
       config: {
         servers: [
           { id: "server-a", base_url: `${base}/wf-a` },
           { id: "server-b", base_url: `${base}/wf-b` },
         ],
       },
-      localFsms: { embedded: new LocalSWPBackend(wfC, {}) },
+      localFsms: { embedded: new LocalSCPBackend(wfC, {}) },
     });
     expect(registry.listServers().map((s) => ({ id: s.id, type: s.type }))).toEqual([
       { id: "server-a", type: "http" },
@@ -967,7 +1080,7 @@ describe("Multiple FSM types in parallel (HTTP servers + embedded)", () => {
   });
 
   it("dynamic connection: empty registry, addServer with real URL, then run to DONE", async () => {
-    const registry = new SWPClientRegistry({});
+    const registry = new SCPClientRegistry({});
     expect(registry.listServerIds()).toEqual([]);
     const dynamicUrl = `${base}/wf-a`;
     registry.addServer("dynamic", dynamicUrl);
@@ -986,7 +1099,7 @@ describe("Multiple FSM types in parallel (HTTP servers + embedded)", () => {
     const configFromSkill = JSON.stringify({
       servers: [{ id: "from-file", base_url: `${base}/wf-b` }],
     });
-    const registry = new SWPClientRegistry({ config: configFromSkill });
+    const registry = new SCPClientRegistry({ config: configFromSkill });
     expect(registry.listServerIds()).toContain("from-file");
     registry.addServer("from-skill", `${base}/wf-a`);
     const c1 = registry.requireClient("from-file");
@@ -1007,12 +1120,12 @@ describe("Complex setups: multiple runs and mixed operations", () => {
   ];
 
   it("registry with two embedded FSMs: two runs on first, one on second", async () => {
-    const wfA = new SWPWorkflow("wa", "INIT", ts, "memory:").hint("INIT", "S").hint("DONE", "D");
-    const wfB = new SWPWorkflow("wb", "INIT", ts, "memory:").hint("INIT", "S").hint("DONE", "D");
-    const registry = new SWPClientRegistry({
+    const wfA = new SCPWorkflow("wa", "INIT", ts, "memory:").hint("INIT", "S").hint("DONE", "D");
+    const wfB = new SCPWorkflow("wb", "INIT", ts, "memory:").hint("INIT", "S").hint("DONE", "D");
+    const registry = new SCPClientRegistry({
       localFsms: {
-        a: new LocalSWPBackend(wfA, {}),
-        b: new LocalSWPBackend(wfB, {}),
+        a: new LocalSCPBackend(wfA, {}),
+        b: new LocalSCPBackend(wfB, {}),
       },
     });
     const clientA = registry.requireClient("a");
@@ -1062,7 +1175,7 @@ describe("Redis stream integration (real Redis connection)", () => {
     "with redisUrl, GET /stream receives frames published on store updates",
     async () => {
       const store: Record<string, { state: string; data: Record<string, unknown>; milestones: string[] }> = {};
-      const w = new SWPWorkflow("redis-wf", "INIT", ts, "http://localhost")
+      const w = new SCPWorkflow("redis-wf", "INIT", ts, "http://localhost")
         .hint("INIT", "Start")
         .hint("DONE", "Done");
       const app = createApp(w, store, { redisUrl: REDIS_URL });
@@ -1125,7 +1238,7 @@ describe("Redis stream integration (real Redis connection)", () => {
 });
 
 /** Start Redis via Docker, run stream test with that URL, confirm in Redis (PING + set/get key). */
-const REDIS_STREAM_CHANNEL_PREFIX = "swp:stream:";
+const REDIS_STREAM_CHANNEL_PREFIX = "scp:stream:";
 const DOCKER_PORT = 6378;
 
 describe("Redis stream with Docker (real Redis container)", () => {
@@ -1174,7 +1287,7 @@ describe("Redis stream with Docker (real Redis container)", () => {
         const ts: TransitionDef[] = [
           { from_state: "INIT", action: "start", to_state: "DONE", is_critical: false },
         ];
-        const w = new SWPWorkflow("redis-wf", "INIT", ts, "http://localhost")
+        const w = new SCPWorkflow("redis-wf", "INIT", ts, "http://localhost")
           .hint("INIT", "Start")
           .hint("DONE", "Done");
         const app = createApp(w, store, { redisUrl: dockerUrl });
@@ -1241,8 +1354,8 @@ describe("Redis stream with Docker (real Redis container)", () => {
         };
         const r = new RedisClient(dockerUrl);
         expect(await r.ping()).toBe("PONG");
-        await r.set("swp:test:docker", "ok");
-        expect(await r.get("swp:test:docker")).toBe("ok");
+        await r.set("scp:test:docker", "ok");
+        expect(await r.get("scp:test:docker")).toBe("ok");
         await r.publish(REDIS_STREAM_CHANNEL_PREFIX + runId, JSON.stringify({ test: "confirm" }));
         await r.quit();
       } finally {

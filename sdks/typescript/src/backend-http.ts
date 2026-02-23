@@ -1,11 +1,11 @@
 /**
- * HTTP backend: talks to a remote SWP server via fetch. Used by SWPClient when given a baseUrl.
+ * HTTP backend: talks to a remote SCP server via fetch. Used by SCPClient when given a baseUrl.
  */
-import type { StateFrame } from "./models.js";
-import { StateFrameSchema } from "./models.js";
-import type { SWPBackend } from "./local.js";
+import type { StateFrame, CliResponse } from "./models.js";
+import { StateFrameSchema, CliResponseSchema } from "./models.js";
+import type { SCPBackend } from "./local.js";
 
-export class HttpSWPBackend implements SWPBackend {
+export class HttpSCPBackend implements SCPBackend {
   private baseUrl: string;
   private timeout: number;
 
@@ -35,6 +35,14 @@ export class HttpSWPBackend implements SWPBackend {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
     return this.parseFrame(await res.json());
+  }
+
+  async getCli(runId: string): Promise<CliResponse> {
+    const res = await fetch(`${this.baseUrl}/runs/${runId}/cli`, {
+      signal: AbortSignal.timeout(this.timeout),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    return CliResponseSchema.parse(await res.json());
   }
 
   async transition(

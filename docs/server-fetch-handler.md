@@ -1,6 +1,6 @@
 # Server without Hono (fetch handler)
 
-The full SWP FSM—discovery, runs, transitions, tools, resources, and **streamable HTTP (NDJSON)**—runs with **no Hono dependency**. Use it on Cloudflare Workers, Supabase Edge Functions, Convex HTTP, or any `fetch`-based runtime.
+The full SCP FSM—discovery, runs, transitions, tools, resources, and **streamable HTTP (NDJSON)**—runs with **no Hono dependency**. Use it on Cloudflare Workers, Supabase Edge Functions, Convex HTTP, or any `fetch`-based runtime.
 
 ---
 
@@ -15,13 +15,13 @@ The full SWP FSM—discovery, runs, transitions, tools, resources, and **streama
 
 ### createFetchHandler(workflow, storeLike?, opts?)
 
-Returns a function `(req: Request) => Promise<Response>` that implements the SWP protocol.
+Returns a function `(req: Request) => Promise<Response>` that implements the SCP protocol.
 
 | Argument | Description |
 |----------|-------------|
-| `workflow` | Your `SWPWorkflow` instance. |
+| `workflow` | Your `SCPWorkflow` instance. |
 | `storeLike` | Optional. `Record<string, RunRecord>`, or an object with `get(id)` / `set(id, record)`. Default: in-memory. |
-| `opts.basePath` | Optional. Base path to strip (e.g. `"/api/swp"`) so a request to `/api/swp/runs` is handled as `/runs`. |
+| `opts.basePath` | Optional. Base path to strip (e.g. `"/api/scp"`) so a request to `/api/scp/runs` is handled as `/runs`. |
 | `opts.streamCallback` | Optional. Called when a transition returns 202 + NDJSON (e.g. for server-side side effects). |
 
 ---
@@ -29,10 +29,10 @@ Returns a function `(req: Request) => Promise<Response>` that implements the SWP
 ## Example: Cloudflare Workers
 
 ```typescript
-import { createFetchHandler, SWPWorkflow, InMemoryStore } from "swp-sdk";
+import { createFetchHandler, SCPWorkflow, InMemoryStore } from "scp-sdk";
 
 const transitions = [{ from_state: "INIT", action: "start", to_state: "DONE" }];
-const workflow = new SWPWorkflow(
+const workflow = new SCPWorkflow(
   "my-wf",
   "INIT",
   transitions,
@@ -40,12 +40,12 @@ const workflow = new SWPWorkflow(
 ).hint("INIT", "Start").hint("DONE", "Done");
 
 const store = new InMemoryStore();
-const handle = createFetchHandler(workflow, store, { basePath: "/api/swp" });
+const handle = createFetchHandler(workflow, store, { basePath: "/api/scp" });
 
 export default { fetch: handle };
 ```
 
-Routes: `GET /api/swp/` (discovery), `POST /api/swp/runs`, `GET /api/swp/runs/:id`, `POST /api/swp/runs/:id/transitions/:action`, `POST /api/swp/runs/:id/invoke/:tool`, `GET /api/swp/runs/:id/resources/:path`, `GET /api/swp/runs/:id/stream`.
+Routes: `GET /api/scp/` (discovery), `POST /api/scp/runs`, `GET /api/scp/runs/:id`, `POST /api/scp/runs/:id/transitions/:action`, `POST /api/scp/runs/:id/invoke/:tool`, `GET /api/scp/runs/:id/resources/:path`, `GET /api/scp/runs/:id/stream`.
 
 ---
 

@@ -1,4 +1,4 @@
-# Minimal Dockerfile for SWP TypeScript SDK
+# Minimal Dockerfile for SCP TypeScript SDK
 FROM node:20-alpine
 WORKDIR /app
 COPY package*.json ./

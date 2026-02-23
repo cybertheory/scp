@@ -1,4 +1,4 @@
-# Minimal Dockerfile for SWP Python SDK (for docker-compose)
+# Minimal Dockerfile for SCP Python SDK (for docker-compose)
 FROM python:3.11-slim
 WORKDIR /app
 COPY sdks/python/ /app/

@@ -4,11 +4,11 @@
  */
 import { createRequire } from "module";
 import type { RunRecord } from "./server.js";
-import type { SWPWorkflow } from "./server.js";
+import type { SCPWorkflow } from "./server.js";
 
 const require = createRequire(import.meta.url);
 
-export const REDIS_STREAM_CHANNEL_PREFIX = "swp:stream:";
+export const REDIS_STREAM_CHANNEL_PREFIX = "scp:stream:";
 
 type RedisPublishClient = { publish(channel: string, message: string): Promise<number> };
 
@@ -27,7 +27,7 @@ export type StoreWithGetSet = { get: (runId: string) => RunRecord | null; set: (
 export function wrapStoreWithRedisPublish(
   inner: StoreWithGetSet,
   redisUrl: string,
-  workflow: SWPWorkflow
+  workflow: SCPWorkflow
 ): StoreWithGetSet {
   const redis = getRedisClient(redisUrl);
   return {
@@ -51,7 +51,7 @@ export function createRedisStream(
   runId: string,
   redisUrl: string,
   getRun: (runId: string) => RunRecord | null,
-  workflow: SWPWorkflow
+  workflow: SCPWorkflow
 ): ReadableStream<Uint8Array> {
   interface RedisSubscriber {
     subscribe(channel: string): Promise<void>;

@@ -1,7 +1,7 @@
 {
-  "name": "swp-sdk",
+  "name": "scp-sdk",
   "version": "0.1.0",
-  "description": "Stateful Workflow Protocol - TypeScript SDK (Hono server, fetch client, LLM wrapper, visualizer)",
+  "description": "Structured Command Protocol - TypeScript SDK (Hono server, fetch client, LLM wrapper, visualizer)",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
