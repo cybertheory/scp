@@ -1,6 +1,6 @@
 {
   "name": "scp-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Structured Command Protocol - TypeScript SDK (Hono server, fetch client, LLM wrapper, visualizer)",
   "type": "module",
   "main": "dist/index.js",
