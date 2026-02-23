@@ -140,6 +140,7 @@ def test_legal_review_serves_cli_endpoint_auto_generated(legal_client):
     assert cli_res.status_code == 200
     cli = cli_res.json()
     assert "prompt" in cli or "hint" in cli or "options" in cli
+    assert cli.get("run_id") == run_id
     assert isinstance(cli.get("options"), list)
     assert len(cli["options"]) >= 1
     assert cli["options"][0]["action"] == "start"
@@ -147,5 +148,6 @@ def test_legal_review_serves_cli_endpoint_auto_generated(legal_client):
     cli_res2 = legal_client.get(f"/runs/{run_id}/cli")
     assert cli_res2.status_code == 200
     cli2 = cli_res2.json()
+    assert cli2.get("run_id") == run_id
     actions = [o["action"] for o in cli2["options"]]
     assert "submit_doc" in actions

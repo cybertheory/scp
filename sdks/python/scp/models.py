@@ -50,6 +50,7 @@ class StateFrameCli(BaseModel):
     hint: Optional[str] = None
     options: Optional[list[CliOption]] = None
     input_hint: Optional[str] = None
+    run_id: Optional[str] = None
 
 
 class StateFrame(BaseModel):

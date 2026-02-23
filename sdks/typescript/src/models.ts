@@ -41,6 +41,7 @@ export const CliResponseSchema = z.object({
   hint: z.string().optional(),
   options: z.array(CliOptionSchema).optional(),
   input_hint: z.string().optional(),
+  run_id: z.string().optional(),
 });
 
 export type CliOption = z.infer<typeof CliOptionSchema>;

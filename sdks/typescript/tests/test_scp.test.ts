@@ -187,12 +187,13 @@ describe("SCP Server + Client", () => {
     const { run_id } = (await post.json()) as { run_id: string };
     const res = await app.request(`http://localhost/runs/${run_id}/cli`);
     expect(res.status).toBe(200);
-    const cli = (await res.json()) as { prompt?: string; hint?: string; options?: { action: string; label: string }[] };
+    const cli = (await res.json()) as { prompt?: string; hint?: string; options?: { action: string; label: string }[]; run_id?: string };
     expect(cli.prompt).toBe("Choose an action");
     expect(cli.hint).toBe("Start");
     expect(cli.options).toHaveLength(1);
     expect(cli.options![0].action).toBe("start");
     expect(cli.options![0].label).toBe("start");
+    expect(cli.run_id).toBe(run_id);
   });
 
   it("GET /runs/:id/cli returns 404 for unknown run", async () => {
@@ -228,13 +229,14 @@ describe("SCP Server + Client", () => {
     const { run_id } = (await post.json()) as { run_id: string };
     const res = await appCli.request(`http://localhost/runs/${run_id}/cli`);
     expect(res.status).toBe(200);
-    const cli = (await res.json()) as { prompt?: string; hint?: string; options?: { action: string; label: string; keys?: string }[] };
+    const cli = (await res.json()) as { prompt?: string; hint?: string; options?: { action: string; label: string; keys?: string }[]; run_id?: string };
     expect(cli.prompt).toBe("What do you want to do?");
     expect(cli.hint).toBe("Pick start or skip.");
     expect(cli.options).toHaveLength(2);
     expect(cli.options!.find((o) => o.action === "start")?.label).toBe("Start workflow");
     expect(cli.options!.find((o) => o.action === "start")?.keys).toBe("1");
     expect(cli.options!.find((o) => o.action === "skip")?.label).toBe("Skip");
+    expect(cli.run_id).toBe(run_id);
   });
 
   it("GET / discovery returns all next_states for initial state", async () => {

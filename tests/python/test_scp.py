@@ -174,6 +174,7 @@ def test_get_cli_returns_200_auto_generated_snake_case(app_and_client):
     assert len(cli["options"]) == 1
     assert cli["options"][0]["action"] == "start"
     assert cli["options"][0]["label"] == "start"
+    assert cli.get("run_id") == run_id
 
 
 def test_get_cli_404_unknown_run(app_and_client):
@@ -218,6 +219,7 @@ def test_get_cli_with_hook_returns_custom_prompt_hint_labels():
     assert len(cli["options"]) == 2
     start_opt = next(o for o in cli["options"] if o["action"] == "start")
     assert start_opt["label"] == "Start workflow"
+    assert cli["run_id"] == run_id
     assert start_opt.get("keys") == "1"
     skip_opt = next(o for o in cli["options"] if o["action"] == "skip")
     assert skip_opt["label"] == "Skip"
@@ -498,6 +500,28 @@ def test_resource_handler_returns_string():
 
 
 # --- SCPClient: parse frame ---
+class _TestClientAdapter:
+    """Sync adapter so SCPClient can use FastAPI TestClient (ASGITransport is async-only in newer httpx)."""
+    def __init__(self, tc: TestClient, base_url: str = "http://testserver"):
+        self._tc = tc
+        self.base_url = base_url
+
+    def _path(self, url: str) -> str:
+        if url.startswith("/"):
+            return url
+        base = self.base_url.rstrip("/")
+        return url[len(base):] if url.startswith(base) else url
+
+    def post(self, url: str, json=None, **kwargs):
+        return self._tc.post(self._path(url), json=json, **kwargs)
+
+    def get(self, url: str, **kwargs):
+        return self._tc.get(self._path(url), **kwargs)
+
+    def close(self) -> None:
+        pass
+
+
 @pytest.mark.skipif(not HAS_ASGI_TRANSPORT, reason="httpx ASGITransport not available")
 def test_scp_client_cli_mode_get_cli_and_step_to_end():
     """Client CLI mode: SCPClient get_frame, get_cli, transition, get_cli; step through to DONE."""
@@ -505,10 +529,9 @@ def test_scp_client_cli_mode_get_cli_and_step_to_end():
     w = SCPWorkflow("test-wf", "INIT", transitions, base_url="http://testserver").hint("INIT", "Start").hint("DONE", "Done")
     store = {}
     app = create_app(w, store=store)
-    import httpx
-    transport = ASGITransport(app=app)
-    http_client = httpx.Client(transport=transport, base_url="http://testserver")
-    client = SCPClient("http://testserver", client=http_client)
+    test_client = TestClient(app)
+    adapter = _TestClientAdapter(test_client, base_url="http://testserver")
+    client = SCPClient("http://testserver", client=adapter)
     try:
         frame0 = client.start_run()
         assert frame0.state == "INIT"
@@ -520,7 +543,7 @@ def test_scp_client_cli_mode_get_cli_and_step_to_end():
         cli1 = client.get_cli()
         assert cli1.get("options") == []
     finally:
-        http_client.close()
+        adapter.close()
 
 
 def test_scp_client_parse_frame():

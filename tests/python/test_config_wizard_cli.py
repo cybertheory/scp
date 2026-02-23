@@ -38,6 +38,7 @@ def test_config_wizard_cli_initial_state_uses_hook(config_wizard_client):
     assert cli["options"][0]["action"] == "start"
     assert cli["options"][0]["label"] == "Start wizard"
     assert cli["options"][0].get("keys") == "1"
+    assert cli["run_id"] == run_id
 
 
 def test_config_wizard_cli_confirm_state_uses_hook(config_wizard_client):
@@ -55,3 +56,4 @@ def test_config_wizard_cli_confirm_state_uses_hook(config_wizard_client):
     assert "cancel" in actions
     assert next(o["label"] for o in cli["options"] if o["action"] == "confirm") == "Yes, apply"
     assert next(o["label"] for o in cli["options"] if o["action"] == "cancel") == "No, cancel"
+    assert cli["run_id"] == run_id

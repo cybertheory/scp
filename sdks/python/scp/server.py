@@ -247,6 +247,7 @@ class SCPWorkflow:
             hint=hint,
             options=options,
             input_hint=None,
+            run_id=run_id,
         )
 
     def get_cli(self, run_id: str, get_run: Callable[[str], RunRecord]) -> StateFrameCli:
@@ -280,6 +281,7 @@ class SCPWorkflow:
                 hint=hook.hint or frame.hint,
                 options=opts,
                 input_hint=hook.input_hint,
+                run_id=run_id,
             )
         return self.build_cli_from_frame(run_id, state, frame)
 

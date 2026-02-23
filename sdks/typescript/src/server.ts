@@ -174,6 +174,7 @@ export class SCPWorkflow {
       prompt: "Choose an action",
       hint: frame.hint,
       options,
+      run_id: frame.run_id,
     };
   }
 
@@ -195,6 +196,7 @@ export class SCPWorkflow {
         hint: hook.hint ?? frame.hint,
         options,
         input_hint: hook.input_hint,
+        run_id,
       };
     }
     return this.buildCliFromFrame(frame);

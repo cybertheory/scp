@@ -64,7 +64,20 @@ Every SCP response is a **State Frame**—the single source of truth for the run
 
 ## Dynamic CLIs (remote dynamic CLI feature)
 
-SCP supports a **remote dynamic CLI** feature: every server exposes **`GET /runs/{run_id}/cli`**, which returns a CLI object (prompt, hint, options) for the current state—either from workflow **hooks** (`.cli(state, ...)`) or **auto-generated** from the frame’s hint and next_states. So any client can use any SCP server as a CLI tool. Tools like **CLRUN** support **dynamic remote CLIs via SCP**: run `clrun scp <url>` to attach to an SCP server; CLRUN fetches the CLI endpoint after every status update and drives the flow in its virtual terminal. See **[Dynamic CLI (detailed)](docs/dynamic-cli.md)**.
+SCP supports a **remote dynamic CLI** feature: every server exposes **`GET /runs/{run_id}/cli`**, which returns a CLI object (prompt, hint, options) for the current state—either from workflow **hooks** (`.cli(state, ...)`) or **auto-generated** from the frame’s hint and next_states. So any client can use any SCP server as a CLI tool.
+
+**[CLRUN](https://github.com/cybertheory/clrun)** (npm: [clrun](https://www.npmjs.com/package/clrun)) supports dynamic remote CLIs via SCP: connect to an SCP server and drive the flow from the terminal. Example:
+
+```bash
+# Connect to an SCP server (Node)
+npx clrun scp http://localhost:8000
+
+# Or install globally first
+npm install -g clrun
+clrun scp http://localhost:8010
+```
+
+Then use `clrun <id> "1"` or `clrun <id> "<action_name>"` to send options; `clrun tail <id> --lines 50` to view output. CLRUN fetches the CLI endpoint after every state update and drives the flow in its virtual terminal. See **[Dynamic CLI (detailed)](docs/dynamic-cli.md)**.
 
 ---
 

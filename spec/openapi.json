@@ -239,7 +239,8 @@
             }
           }
         },
-        "input_hint": { "type": "string", "description": "When state expects free-form input." }
+        "input_hint": { "type": "string", "description": "When state expects free-form input." },
+        "run_id": { "type": "string", "description": "Run ID; use with base URL to form GET /runs/{run_id}/cli for viewing in browser." }
       }
     }
   }
