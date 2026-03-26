@@ -1,6 +1,6 @@
 import type { StateFrame } from "./models.js";
 import { getTransitionByAction } from "./models.js";
-import { SCPClient } from "./client.js";
+import { ASMPClient } from "./client.js";
 
 export type FetchSkillFn = (url: string) => Promise<string>;
 
@@ -30,9 +30,9 @@ export function buildSystemPrompt(frame: StateFrame, skillContent?: string | nul
 
 export type LLMCallFn = (systemPrompt: string, messages: Array<{ role: string; content: string }>) => Promise<string>;
 
-export class SCPLLMWrapper {
+export class ASMPLLMWrapper {
   constructor(
-    private client: SCPClient,
+    private client: ASMPClient,
     private llmCall: LLMCallFn,
     private fetchSkill: FetchSkillFn = fetchSkillContent
   ) {}

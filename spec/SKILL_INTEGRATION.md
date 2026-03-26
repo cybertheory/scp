@@ -1,6 +1,6 @@
-# SCP and Open Agent Skill Integration
+# ASMP and Open Agent Skill Integration
 
-SCP treats **skills** as on-demand instructions tied to workflow state. Instead of loading every tool/skill up front (like MCP), SCP only exposes the skill relevant to the current state via `active_skill`.
+ASMP treats **skills** as on-demand instructions tied to workflow state. Instead of loading every tool/skill up front (like MCP), ASMP only exposes the skill relevant to the current state via `active_skill`.
 
 ## 1. Skill-as-State
 
@@ -36,14 +36,14 @@ SCP treats **skills** as on-demand instructions tied to workflow state. Instead 
 
 ## 4. Server Behavior
 
-- The SCP server defines the FSM and which state has which `active_skill`.
+- The ASMP server defines the FSM and which state has which `active_skill`.
 - It may serve SKILL.md from the same host (e.g. `/skills/<name>/SKILL.md`) or point to an external URL.
 - The server does not interpret SKILL.md; it only provides the link. The client (or SDK) is responsible for fetching and injecting.
 
 ## 5. Local vs Remote Skills
 
 - **Local**: `url` can be `file://` or a path the agent can read from disk (e.g. in Cursor, relative to workspace). The SDK can resolve paths to SKILL.md in a known `skills/` directory.
-- **Remote**: `url` is an HTTP(S) endpoint. The SDK fetches it with the same credentials as the SCP server if needed.
+- **Remote**: `url` is an HTTP(S) endpoint. The SDK fetches it with the same credentials as the ASMP server if needed.
 
 ## 6. Skill Ref in Transitions (Optional)
 

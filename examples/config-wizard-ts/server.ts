@@ -1,5 +1,5 @@
 /**
- * Config Wizard - SCP example using optional CLI hooks (.cli()).
+ * Config Wizard - ASMP example using optional CLI hooks (.cli()).
  *
  * Demonstrates workflow.cli(state, { prompt, hint, options, input_hint })
  * so GET /runs/{run_id}/cli returns custom labels and prompts.
@@ -9,7 +9,7 @@
  * Run from repo root: npx tsx examples/config-wizard-ts/server.ts
  */
 import { resolve } from "path";
-import { createApp, SCPWorkflow } from "../../sdks/typescript/src/server.js";
+import { createApp, ASMPWorkflow } from "../../sdks/typescript/src/server.js";
 import type { TransitionDef } from "../../sdks/typescript/src/models.js";
 
 const transitions: TransitionDef[] = [
@@ -20,7 +20,7 @@ const transitions: TransitionDef[] = [
 ];
 
 const BASE = "http://localhost:3010";
-const workflow = new SCPWorkflow("config-wizard-v1", "INITIAL", transitions, BASE)
+const workflow = new ASMPWorkflow("config-wizard-v1", "INITIAL", transitions, BASE)
   .hint("INITIAL", "Start the config wizard.")
   .hint("CONFIGURE", "Enter a value and save.")
   .hint("CONFIRM", "Confirm to apply or cancel.")
@@ -54,7 +54,7 @@ const store: Record<string, { state: string; data: Record<string, unknown>; mile
 const app = createApp(workflow, store);
 
 const port = 3010;
-console.log(`SCP Config Wizard (CLI hooks) at http://localhost:${port}`);
+console.log(`ASMP Config Wizard (CLI hooks) at http://localhost:${port}`);
 const { serve } = await import("@hono/node-server");
 serve({ fetch: app.fetch, port });
 export { app };

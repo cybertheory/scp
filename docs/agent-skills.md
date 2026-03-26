@@ -1,6 +1,6 @@
 # Agent skills
 
-SCP integrates with the [Open Agent Skill](https://cursor.com/docs/agents/skills) spec. When a State Frame includes `active_skill`, the client should load that skill only in the current state, keeping context minimal (just-in-time).
+ASMP integrates with the [Open Agent Skill](https://cursor.com/docs/agents/skills) spec. When a State Frame includes `active_skill`, the client should load that skill only in the current state, keeping context minimal (just-in-time).
 
 ---
 

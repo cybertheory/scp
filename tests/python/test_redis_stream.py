@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT / "sdks" / "python"))
 pytest.importorskip("redis")
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
-REDIS_STREAM_CHANNEL_PREFIX = "scp:stream:"
+REDIS_STREAM_CHANNEL_PREFIX = "asmp:stream:"
 
 
 def _redis_available() -> bool:
@@ -47,15 +47,15 @@ def redis_available():
 
 def test_redis_stream_integration(redis_available):
     """With redis_url, GET /stream receives frames published on store updates (real Redis connection)."""
-    from scp.server import SCPWorkflow, create_app
-    from scp.models import TransitionDef
+    from asmp.server import ASMPWorkflow, create_app
+    from asmp.models import TransitionDef
     from fastapi.testclient import TestClient
 
     transitions = [
         TransitionDef(from_state="INIT", action="start", to_state="DONE"),
     ]
     workflow = (
-        SCPWorkflow("redis-wf", "INIT", transitions, base_url="http://test")
+        ASMPWorkflow("redis-wf", "INIT", transitions, base_url="http://test")
         .hint("INIT", "Start")
         .hint("DONE", "Done")
     )
@@ -141,8 +141,8 @@ def _wait_redis(redis_url: str, timeout: float = 10.0) -> bool:
 
 def test_redis_stream_with_docker():
     """Start Redis via Docker, run stream integration with that URL, confirm in Redis (PING + key)."""
-    from scp.server import SCPWorkflow, create_app
-    from scp.models import TransitionDef
+    from asmp.server import ASMPWorkflow, create_app
+    from asmp.models import TransitionDef
     from fastapi.testclient import TestClient
     import redis
 
@@ -160,7 +160,7 @@ def test_redis_stream_with_docker():
             TransitionDef(from_state="INIT", action="start", to_state="DONE"),
         ]
         workflow = (
-            SCPWorkflow("redis-wf", "INIT", transitions, base_url="http://test")
+            ASMPWorkflow("redis-wf", "INIT", transitions, base_url="http://test")
             .hint("INIT", "Start")
             .hint("DONE", "Done")
         )
@@ -201,8 +201,8 @@ def test_redis_stream_with_docker():
         # Confirm in Redis: connect and PING + write/read key (proves we used this Redis)
         r_client = redis.from_url(redis_url, decode_responses=True)
         assert r_client.ping() is True
-        r_client.set("scp:test:docker", "ok")
-        assert r_client.get("scp:test:docker") == "ok"
+        r_client.set("asmp:test:docker", "ok")
+        assert r_client.get("asmp:test:docker") == "ok"
         # Channel used by the SDK for this run
         channel = REDIS_STREAM_CHANNEL_PREFIX + run_id
         # PUBSUB NUMSUB confirms channel had subscribers (may be 0 now); or just verify we can publish to it

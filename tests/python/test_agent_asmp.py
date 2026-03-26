@@ -1,5 +1,5 @@
 """
-Agent integration test: an AI agent uses the SCP client and OpenAI (mini) to drive a workflow.
+Agent integration test: an AI agent uses the ASMP client and OpenAI (mini) to drive a workflow.
 Requires OPENAI_API_KEY. Skip if not set or if openai is not installed.
 """
 import os
@@ -14,7 +14,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "sdks" / "python"))
 
-from scp.client import SCPClient
+from asmp.client import ASMPClient
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 try:
@@ -24,8 +24,8 @@ except ImportError:
 
 
 @pytest.fixture(scope="module")
-def scp_server():
-    """Start the minimal SCP app (INIT -> start -> DONE) on a fixed port."""
+def asmp_server():
+    """Start the minimal ASMP app (INIT -> start -> DONE) on a fixed port."""
     port = 18765
     base_url = f"http://127.0.0.1:{port}"
     env = {**os.environ, "PYTHONPATH": str(ROOT)}
@@ -65,10 +65,10 @@ def scp_server():
     not OPENAI_API_KEY or OpenAI is None,
     reason="OPENAI_API_KEY required and openai package must be installed (pip install openai)",
 )
-def test_agent_drives_workflow_via_openai_mini(scp_server):
+def test_agent_drives_workflow_via_openai_mini(asmp_server):
     """An agent starts a run, gets the frame, uses OpenAI tool-calling to choose the 'start' action, executes it, and reaches DONE."""
-    base_url = scp_server
-    client = SCPClient(base_url=base_url, timeout=10.0)
+    base_url = asmp_server
+    client = ASMPClient(base_url=base_url, timeout=10.0)
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
     model = "gpt-4o-mini"
 

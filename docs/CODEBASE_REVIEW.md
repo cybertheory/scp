@@ -1,6 +1,6 @@
-# SCP Codebase Review
+# ASMP Codebase Review
 
-A comprehensive review of the Structured Command Protocol (SCP) repository for clarity, testing, documentation, developer experience, and potential confusion or shortcuts.
+A comprehensive review of the Agent State Machine Protocol (ASMP) repository for clarity, testing, documentation, developer experience, and potential confusion or shortcuts.
 
 ---
 
@@ -21,7 +21,7 @@ A comprehensive review of the Structured Command Protocol (SCP) repository for c
 
 ### 2. **Documentation**
 
-- **README.md** is strong: value prop (SCP vs MCP), State Frame table, stage integrations, agent skills, streaming, quickstart for both SDKs, client curl, repository layout, visualizer, OpenAPI note, SDK naming (snake_case vs camelCase).
+- **README.md** is strong: value prop (ASMP vs MCP), State Frame table, stage integrations, agent skills, streaming, quickstart for both SDKs, client curl, repository layout, visualizer, OpenAPI note, SDK naming (snake_case vs camelCase).
 - **docs/README.md** is a clear index into state-frame, stage-integrations, agent-skills, streaming, quickstart, server fetch handler, client-local-FSM, client-discovery, visualizer.
 - **docs/quickstart.md** has install + run for Python (FastAPI) and TypeScript (Hono) and curl for “any language.”
 - Feature docs (state-frame, stage-integrations, agent-skills, streaming, server-fetch-handler, client-local-fsm, client-discovery, visualizer) are linked from README and spec where relevant.
@@ -29,18 +29,18 @@ A comprehensive review of the Structured Command Protocol (SCP) repository for c
 ### 3. **Testing**
 
 - **Python**
-  - **tests/python/test_scp.py**: FSM/transition, build_frame, visualize, client-server (start run, get frame, transition, 403, 404+hint, expects validation), stage integrations (tools/resources, 403 when wrong state, full step-through), resource returning string + Content-Type, SCPClient `_parse_frame`.
+  - **tests/python/test_asmp.py**: FSM/transition, build_frame, visualize, client-server (start run, get frame, transition, 403, 404+hint, expects validation), stage integrations (tools/resources, 403 when wrong state, full step-through), resource returning string + Content-Type, ASMPClient `_parse_frame`.
   - **tests/python/test_example_business_logic.py**: Legal-review example validated (validate_document, run_analysis, risk_summary, audit_report resource).
-  - **tests/python/test_agent_scp.py**: Optional agent test (OpenAI mini drives workflow); skipped without `OPENAI_API_KEY`; spawns uvicorn and waits for readiness.
+  - **tests/python/test_agent_asmp.py**: Optional agent test (OpenAI mini drives workflow); skipped without `OPENAI_API_KEY`; spawns uvicorn and waits for readiness.
 - **TypeScript**
-  - **sdks/typescript/tests/test_scp.test.ts**: Workflow buildFrame, getTransition, visualizeFsm, server+client (POST/GET/transition, 403, visualize, openapi.json, 404+hint), StateFrameSchema, stage integrations (tools/resources, 403 in wrong state, full FSM), example business logic (run_lint_check + run data), createFetchHandler, LocalSCPBackend (client + stream), client discovery (parseSCPClientConfig, registry, localFsms, addServer, getClient/requireClient/remove, timeout, addConfig, deprecated localBackends), streamCallback, basePath, InMemoryStore, parallel HTTP+embedded, dynamic add server.
-  - **sdks/typescript/tests/test_agent_scp.test.ts**: Optional agent tests (OpenAI mini; registry with http+embedded; dynamic add_server); skipped without `OPENAI_API_KEY`.
+  - **sdks/typescript/tests/test_asmp.test.ts**: Workflow buildFrame, getTransition, visualizeFsm, server+client (POST/GET/transition, 403, visualize, openapi.json, 404+hint), StateFrameSchema, stage integrations (tools/resources, 403 in wrong state, full FSM), example business logic (run_lint_check + run data), createFetchHandler, LocalASMPBackend (client + stream), client discovery (parseASMPClientConfig, registry, localFsms, addServer, getClient/requireClient/remove, timeout, addConfig, deprecated localBackends), streamCallback, basePath, InMemoryStore, parallel HTTP+embedded, dynamic add server.
+  - **sdks/typescript/tests/test_agent_asmp.test.ts**: Optional agent tests (OpenAI mini; registry with http+embedded; dynamic add_server); skipped without `OPENAI_API_KEY`.
 - Guard enforcement is explicitly tested (invalid transition, missing expects, tool/resource 403).
 
 ### 4. **SDK design and parity**
 
-- **Python**: FastAPI app factory, Pydantic models, `Store`/`InMemoryStore`, SCPClient (httpx), SCPLLMWrapper, visualize_fsm. OpenAPI loaded from package `openapi.json` (synced from spec).
-- **TypeScript**: Hono app, Zod models, InMemoryStore, SCPClient over backend abstraction (HTTP or Local), SCPLLMWrapper, visualizeFsm, createFetchHandler for Workers/Supabase/Convex. OpenAPI in openapi-spec.ts (single source: spec).
+- **Python**: FastAPI app factory, Pydantic models, `Store`/`InMemoryStore`, ASMPClient (httpx), ASMPLLMWrapper, visualize_fsm. OpenAPI loaded from package `openapi.json` (synced from spec).
+- **TypeScript**: Hono app, Zod models, InMemoryStore, ASMPClient over backend abstraction (HTTP or Local), ASMPLLMWrapper, visualizeFsm, createFetchHandler for Workers/Supabase/Convex. OpenAPI in openapi-spec.ts (single source: spec).
 - Same protocol surface: start run, get frame, transition, invoke tool, read resource, stream. Python snake_case vs TypeScript camelCase is documented.
 
 ### 5. **Examples**
@@ -56,7 +56,7 @@ A comprehensive review of the Structured Command Protocol (SCP) repository for c
 
 ## Issues fixed in this review
 
-1. **tests/python/test_scp.py**  
+1. **tests/python/test_asmp.py**  
    `ROOT = Path(__file__).resolve().parents[1]` pointed at `tests/`, so `ROOT / "sdks" / "python"` was wrong. Changed to `parents[2]` (repo root) so the SDK is on the path when running tests from repo root.
 
 2. **README.md**  
@@ -68,7 +68,7 @@ A comprehensive review of the Structured Command Protocol (SCP) repository for c
 
 ### 1. **Python GET `/` (discovery) only exposes the first next_state**
 
-In **sdks/python/scp/server.py** (discover endpoint), the frame’s `next_states` is replaced with a list containing only the first transition:
+In **sdks/python/asmp/server.py** (discover endpoint), the frame’s `next_states` is replaced with a list containing only the first transition:
 
 ```python
 first_ns = frame.next_states[0]
@@ -79,7 +79,7 @@ So if the initial state has multiple transitions, only one is shown. That may be
 
 ### 2. **OpenAPI sync is manual**
 
-README says: update `spec/openapi.json` first, then Python’s `sdks/python/scp/openapi.json` and TypeScript’s `sdks/typescript/src/openapi-spec.ts`. There is no script or CI step to enforce this. **Recommendation:** Add a small script or CI job that diffs the served spec (or the two derived files) against `spec/openapi.json` and fails if they diverge.
+README says: update `spec/openapi.json` first, then Python’s `sdks/python/asmp/openapi.json` and TypeScript’s `sdks/typescript/src/openapi-spec.ts`. There is no script or CI step to enforce this. **Recommendation:** Add a small script or CI job that diffs the served spec (or the two derived files) against `spec/openapi.json` and fails if they diverge.
 
 ### 3. **Test layout: tests/ vs sdks/typescript/tests/**
 
@@ -106,15 +106,15 @@ TypeScript registry supports `localBackends` (deprecated in favor of `localFsms`
 
 ### 1. **Stream endpoint: synthetic loop in Python**
 
-In **sdks/python/scp/server.py**, `stream_updates` sends a few frames in a loop with `asyncio.sleep` and no real queue. Comment says “In production, subscribe to a queue (Redis, etc.).” This is clearly a placeholder. **Recommendation:** Keep as-is but add a single line in docs/streaming.md: “The Python SDK’s default stream endpoint is a simple loop for development; production implementations should use a queue (e.g. Redis) keyed by run_id.”
+In **sdks/python/asmp/server.py**, `stream_updates` sends a few frames in a loop with `asyncio.sleep` and no real queue. Comment says “In production, subscribe to a queue (Redis, etc.).” This is clearly a placeholder. **Recommendation:** Keep as-is but add a single line in docs/streaming.md: “The Python SDK’s default stream endpoint is a simple loop for development; production implementations should use a queue (e.g. Redis) keyed by run_id.”
 
 ### 2. **CI-CD example: relative import to SDK**
 
 **examples/ci-cd-bot/server.ts** uses:
 
-`import { createApp, SCPWorkflow } from "../../sdks/typescript/src/server.js";`
+`import { createApp, ASMPWorkflow } from "../../sdks/typescript/src/server.js";`
 
-So the example assumes a specific repo layout. If the SDK is installed as a package (`scp-sdk`), users would import from the package. **Recommendation:** In the example’s comment or in README, state that the example is intended to run from the repo and uses relative imports; for an installed package use `from "scp-sdk"` (and point to quickstart).
+So the example assumes a specific repo layout. If the SDK is installed as a package (`asmp-sdk`), users would import from the package. **Recommendation:** In the example’s comment or in README, state that the example is intended to run from the repo and uses relative imports; for an installed package use `from "asmp-sdk"` (and point to quickstart).
 
 ### 3. **No CONTRIBUTING.md**
 
@@ -122,7 +122,7 @@ There is no CONTRIBUTING.md for PR process, code style, or how to run tests. **R
 
 ### 4. **Python client: new httpx client per request**
 
-**sdks/python/scp/client.py** uses `with httpx.Client(...)` inside each method, so a new connection is created per call. For many sequential calls this is less efficient than one shared client. **Recommendation:** Consider holding a single `httpx.Client` (or AsyncClient) on the SCPClient instance, or document “for heavy use, consider a shared HTTP client” if you prefer to keep the API minimal.
+**sdks/python/asmp/client.py** uses `with httpx.Client(...)` inside each method, so a new connection is created per call. For many sequential calls this is less efficient than one shared client. **Recommendation:** Consider holding a single `httpx.Client` (or AsyncClient) on the ASMPClient instance, or document “for heavy use, consider a shared HTTP client” if you prefer to keep the API minimal.
 
 ---
 
@@ -130,11 +130,11 @@ There is no CONTRIBUTING.md for PR process, code style, or how to run tests. **R
 
 ### 1. **Bare except in TypeScript test**
 
-In **sdks/typescript/tests/test_scp.test.ts** (runLintCheckHandler fallback), `catch {}` swallows all errors. Prefer `catch (err)` and at least log or rethrow if not intentional.
+In **sdks/typescript/tests/test_asmp.test.ts** (runLintCheckHandler fallback), `catch {}` swallows all errors. Prefer `catch (err)` and at least log or rethrow if not intentional.
 
 ### 2. **Python transition: merging full body into run data**
 
-In **sdks/python/scp/server.py** transition handler:
+In **sdks/python/asmp/server.py** transition handler:
 
 ```python
 if body:

@@ -2,7 +2,7 @@
 
 ## 1. Start the server
 
-From this directory (with a venv that has `scp-sdk` installed):
+From this directory (with a venv that has `asmp-sdk` installed):
 
 ```bash
 python app.py
@@ -61,14 +61,14 @@ The CLI for a run is at **`GET /runs/{run_id}/cli`**. You need a `run_id` first.
 From the **CLRUN** project root (where the `clrun` CLI is installed):
 
 ```bash
-clrun scp http://127.0.0.1:8010
+clrun asmp http://127.0.0.1:8010
 ```
 
 CLRUN will:
 
-1. Create a new run on the SCP server.
+1. Create a new run on the ASMP server.
 2. Fetch the CLI (prompt, hint, options) and show them in the terminal.
-3. Print a `terminal_id` for this SCP session.
+3. Print a `terminal_id` for this ASMP session.
 
 Then send options by index or action name:
 
@@ -90,7 +90,7 @@ clrun status
 Example flow:
 
 ```bash
-$ clrun scp http://127.0.0.1:8010
+$ clrun asmp http://127.0.0.1:8010
 # ... terminal_id: abc123 ...
 # Config wizard
 # Press 1 to start, or 2 to exit.

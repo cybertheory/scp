@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-# Ensure SDK is on path (same as test_scp.py)
+# Ensure SDK is on path (same as test_asmp.py)
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "sdks" / "python"))
 

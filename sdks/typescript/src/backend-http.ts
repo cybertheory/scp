@@ -1,11 +1,11 @@
 /**
- * HTTP backend: talks to a remote SCP server via fetch. Used by SCPClient when given a baseUrl.
+ * HTTP backend: talks to a remote ASMP server via fetch. Used by ASMPClient when given a baseUrl.
  */
 import type { StateFrame, CliResponse } from "./models.js";
 import { StateFrameSchema, CliResponseSchema } from "./models.js";
-import type { SCPBackend } from "./local.js";
+import type { ASMPBackend } from "./local.js";
 
-export class HttpSCPBackend implements SCPBackend {
+export class HttpASMPBackend implements ASMPBackend {
   private baseUrl: string;
   private timeout: number;
 

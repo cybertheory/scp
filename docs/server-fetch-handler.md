@@ -1,6 +1,6 @@
 # Server without Hono (fetch handler)
 
-The full SCP FSM—discovery, runs, transitions, tools, resources, and **streamable HTTP (NDJSON)**—runs with **no Hono dependency**. Use it on Cloudflare Workers, Supabase Edge Functions, Convex HTTP, or any `fetch`-based runtime.
+The full ASMP FSM—discovery, runs, transitions, tools, resources, and **streamable HTTP (NDJSON)**—runs with **no Hono dependency**. Use it on Cloudflare Workers, Supabase Edge Functions, Convex HTTP, or any `fetch`-based runtime.
 
 ---
 
@@ -15,13 +15,13 @@ The full SCP FSM—discovery, runs, transitions, tools, resources, and **streama
 
 ### createFetchHandler(workflow, storeLike?, opts?)
 
-Returns a function `(req: Request) => Promise<Response>` that implements the SCP protocol.
+Returns a function `(req: Request) => Promise<Response>` that implements the ASMP protocol.
 
 | Argument | Description |
 |----------|-------------|
-| `workflow` | Your `SCPWorkflow` instance. |
+| `workflow` | Your `ASMPWorkflow` instance. |
 | `storeLike` | Optional. `Record<string, RunRecord>`, or an object with `get(id)` / `set(id, record)`. Default: in-memory. |
-| `opts.basePath` | Optional. Base path to strip (e.g. `"/api/scp"`) so a request to `/api/scp/runs` is handled as `/runs`. |
+| `opts.basePath` | Optional. Base path to strip (e.g. `"/api/asmp"`) so a request to `/api/asmp/runs` is handled as `/runs`. |
 | `opts.streamCallback` | Optional. Called when a transition returns 202 + NDJSON (e.g. for server-side side effects). |
 
 ---
@@ -29,10 +29,10 @@ Returns a function `(req: Request) => Promise<Response>` that implements the SCP
 ## Example: Cloudflare Workers
 
 ```typescript
-import { createFetchHandler, SCPWorkflow, InMemoryStore } from "scp-sdk";
+import { createFetchHandler, ASMPWorkflow, InMemoryStore } from "asmp-sdk";
 
 const transitions = [{ from_state: "INIT", action: "start", to_state: "DONE" }];
-const workflow = new SCPWorkflow(
+const workflow = new ASMPWorkflow(
   "my-wf",
   "INIT",
   transitions,
@@ -40,12 +40,12 @@ const workflow = new SCPWorkflow(
 ).hint("INIT", "Start").hint("DONE", "Done");
 
 const store = new InMemoryStore();
-const handle = createFetchHandler(workflow, store, { basePath: "/api/scp" });
+const handle = createFetchHandler(workflow, store, { basePath: "/api/asmp" });
 
 export default { fetch: handle };
 ```
 
-Routes: `GET /api/scp/` (discovery), `POST /api/scp/runs`, `GET /api/scp/runs/:id`, `POST /api/scp/runs/:id/transitions/:action`, `POST /api/scp/runs/:id/invoke/:tool`, `GET /api/scp/runs/:id/resources/:path`, `GET /api/scp/runs/:id/stream`.
+Routes: `GET /api/asmp/` (discovery), `POST /api/asmp/runs`, `GET /api/asmp/runs/:id`, `POST /api/asmp/runs/:id/transitions/:action`, `POST /api/asmp/runs/:id/invoke/:tool`, `GET /api/asmp/runs/:id/resources/:path`, `GET /api/asmp/runs/:id/stream`.
 
 ---
 

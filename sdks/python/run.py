@@ -1,12 +1,12 @@
-"""Run a default SCP server for Docker or local testing."""
-from scp import SCPWorkflow, TransitionDef, create_app
+"""Run a default ASMP server for Docker or local testing."""
+from asmp import ASMPWorkflow, TransitionDef, create_app
 import uvicorn
 
 transitions = [
     TransitionDef(from_state="INIT", action="start", to_state="DONE"),
 ]
 workflow = (
-    SCPWorkflow("default-wf", "INIT", transitions, base_url="http://localhost:8000")
+    ASMPWorkflow("default-wf", "INIT", transitions, base_url="http://localhost:8000")
     .hint("INIT", "Start the workflow.")
     .hint("DONE", "Workflow complete.")
 )

@@ -1,6 +1,6 @@
-# SCP Documentation
+# ASMP Documentation
 
-Detailed documentation for every feature of the Structured Command Protocol (SCP) and its SDKs.
+Detailed documentation for every feature of the Agent State Machine Protocol (ASMP) and its SDKs.
 
 ---
 
@@ -26,7 +26,7 @@ Detailed documentation for every feature of the Structured Command Protocol (SCP
 
 | Doc | Description |
 |-----|-------------|
-| [**Quickstart**](quickstart.md) | Run your first SCP server and client: Python (FastAPI), TypeScript (Hono), and raw HTTP/curl. |
+| [**Quickstart**](quickstart.md) | Run your first ASMP server and client: Python (FastAPI), TypeScript (Hono), and raw HTTP/curl. |
 
 ---
 
@@ -43,7 +43,7 @@ Detailed documentation for every feature of the Structured Command Protocol (SCP
 | Doc | Description |
 |-----|-------------|
 | [**Client-side local FSM**](client-local-fsm.md) | Run an in-memory FSM with no server; mix local and remote backends in parallel. |
-| [**Client discovery config**](client-discovery.md) | JSON config (MCP-style), `SCPClientRegistry`, servers vs embedded FSMs, and dynamic server add. |
+| [**Client discovery config**](client-discovery.md) | JSON config (MCP-style), `ASMPClientRegistry`, servers vs embedded FSMs, and dynamic server add. |
 
 ---
 

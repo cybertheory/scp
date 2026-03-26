@@ -6,26 +6,26 @@ Clients can run an **in-memory FSM** with no server. The same client API works o
 
 ## What it is
 
-- **Local FSM (embedded)**: The workflow and store run in the same process as the client. No HTTP, no server. You pass a `LocalSCPBackend` (or any `SCPBackend`) to `SCPClient`.
+- **Local FSM (embedded)**: The workflow and store run in the same process as the client. No HTTP, no server. You pass a `LocalASMPBackend` (or any `ASMPBackend`) to `ASMPClient`.
 - **Local server**: A separate process listening on e.g. `http://localhost:3000`. The client talks to it via HTTP. That is a **server** (type `"http"`), not an embedded FSM. See [Client discovery](client-discovery.md).
 
 ---
 
-## LocalSCPBackend (TypeScript)
+## LocalASMPBackend (TypeScript)
 
 Construct with a workflow and an optional store (default: in-memory).
 
 ```typescript
-import { LocalSCPBackend, SCPWorkflow, SCPClient } from "scp-sdk";
+import { LocalASMPBackend, ASMPWorkflow, ASMPClient } from "asmp-sdk";
 
-const workflow = new SCPWorkflow("local-wf", "INIT", transitions, "memory:")
+const workflow = new ASMPWorkflow("local-wf", "INIT", transitions, "memory:")
   .hint("INIT", "Start")
   .hint("LINT", "Lint")
   .tool("LINT", "run_lint", (id, rec, body) => ({ passed: true }))
   .resource("LINT", "report", () => "# Report\n...");
 
-const backend = new LocalSCPBackend(workflow, {});
-const client = new SCPClient(backend);
+const backend = new LocalASMPBackend(workflow, {});
+const client = new ASMPClient(backend);
 ```
 
 Then use the client as usual:
@@ -42,16 +42,16 @@ for await (const chunk of client.stream()) {
 
 ---
 
-## SCPClient with backend or baseUrl
+## ASMPClient with backend or baseUrl
 
-- **`new SCPClient(baseUrl)`** — Uses HTTP (remote or localhost). Same as before.
-- **`new SCPClient(backend)`** — Uses the given `SCPBackend` (e.g. `LocalSCPBackend`). No HTTP.
+- **`new ASMPClient(baseUrl)`** — Uses HTTP (remote or localhost). Same as before.
+- **`new ASMPClient(backend)`** — Uses the given `ASMPBackend` (e.g. `LocalASMPBackend`). No HTTP.
 
 You can hold multiple clients (e.g. one per server, one local) and drive them in parallel so the agent can use both remote and local workflows.
 
 ---
 
-## Backend interface (SCPBackend)
+## Backend interface (ASMPBackend)
 
 A backend implements:
 
@@ -62,4 +62,4 @@ A backend implements:
 - `readResource?(runId, path)` → string | object
 - `stream?(runId)` → AsyncGenerator of frames
 
-`HttpSCPBackend` and `LocalSCPBackend` both implement this. You can plug in a custom backend (e.g. testing, or another transport).
+`HttpASMPBackend` and `LocalASMPBackend` both implement this. You can plug in a custom backend (e.g. testing, or another transport).

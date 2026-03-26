@@ -1,14 +1,14 @@
 /**
- * Client-side local FSM: run an SCP workflow in-memory with no server.
+ * Client-side local FSM: run an ASMP workflow in-memory with no server.
  * Use for offline flows, testing, or mixing local + remote capabilities in parallel.
  */
 import type { StateFrame } from "./models.js";
 import type { CliResponse } from "./models.js";
-import type { SCPWorkflow } from "./server.js";
+import type { ASMPWorkflow } from "./server.js";
 import type { RunRecord, StoreLike } from "./server.js";
 import { normalizeStore } from "./server.js";
 
-export type SCPBackend = {
+export type ASMPBackend = {
   startRun(data?: Record<string, unknown>): Promise<StateFrame>;
   getFrame(runId: string): Promise<StateFrame>;
   getCli?(runId: string): Promise<CliResponse>;
@@ -21,11 +21,11 @@ export type SCPBackend = {
 /**
  * Runs the workflow FSM locally: no HTTP, no server. Same semantics as the server (transitions, tools, resources, stream).
  */
-export class LocalSCPBackend implements SCPBackend {
-  private workflow: SCPWorkflow;
+export class LocalASMPBackend implements ASMPBackend {
+  private workflow: ASMPWorkflow;
   private store: { get(id: string): RunRecord | null; set(id: string, r: RunRecord): void };
 
-  constructor(workflow: SCPWorkflow, storeLike: StoreLike = {}) {
+  constructor(workflow: ASMPWorkflow, storeLike: StoreLike = {}) {
     this.workflow = workflow;
     this.store = normalizeStore(storeLike);
   }

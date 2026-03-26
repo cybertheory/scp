@@ -1,10 +1,10 @@
 /**
- * Server-agnostic SCP handler: Request → Response.
+ * Server-agnostic ASMP handler: Request → Response.
  * Use with Cloudflare Workers, Supabase Edge Functions, Convex HTTP, or any fetch-based runtime.
  * No Hono dependency. Streamable HTTP (NDJSON) uses ReadableStream.
  */
 import type { StateFrame } from "./models.js";
-import type { SCPWorkflow } from "./server.js";
+import type { ASMPWorkflow } from "./server.js";
 import type { RunRecord, StoreLike } from "./server.js";
 import { normalizeStore } from "./server.js";
 import { createRedisStream, wrapStoreWithRedisPublish } from "./redis-stream.js";
@@ -35,7 +35,7 @@ function matchPath(pathname: string): { route: string; runId?: string; action?: 
 }
 
 export type CreateFetchHandlerOptions = {
-  /** Base path to strip (e.g. "/api/scp" so request to /api/scp/runs is handled as /runs). Default "". */
+  /** Base path to strip (e.g. "/api/asmp" so request to /api/asmp/runs is handled as /runs). Default "". */
   basePath?: string;
   /** Called when a transition returns 202 + NDJSON stream (e.g. for server-side side effects). */
   streamCallback?: (run_id: string, frame: StateFrame) => void;
@@ -44,11 +44,11 @@ export type CreateFetchHandlerOptions = {
 };
 
 /**
- * Returns a fetch handler that runs the full SCP FSM (discovery, runs, transitions, tools, resources, stream).
+ * Returns a fetch handler that runs the full ASMP FSM (discovery, runs, transitions, tools, resources, stream).
  * Use with: export default { fetch: createFetchHandler(workflow, store) } in Workers/Supabase/Convex.
  */
 export function createFetchHandler(
-  workflow: SCPWorkflow,
+  workflow: ASMPWorkflow,
   storeLike: StoreLike = {},
   opts: CreateFetchHandlerOptions = {}
 ): (req: Request) => Promise<Response> {

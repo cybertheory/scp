@@ -1,12 +1,12 @@
 # Stage integrations (tools & resources)
 
-Stage integrations attach **tools** (callable) and **resources** (read-only) to specific FSM states. Unlike a global tool menu, SCP exposes only the integrations that are valid in the **current state**, so the agent gets a minimal, FSM-gated surface.
+Stage integrations attach **tools** (callable) and **resources** (read-only) to specific FSM states. Unlike a global tool menu, ASMP exposes only the integrations that are valid in the **current state**, so the agent gets a minimal, FSM-gated surface.
 
 ---
 
 ## Concepts
 
-| Concept | Meaning in SCP |
+| Concept | Meaning in ASMP |
 |--------|-----------------|
 | **Tool** | A named, callable capability in a state. The agent sends `POST <href>` with an optional body; the server runs the **handler** for that state and tool and returns `{ result }`. |
 | **Resource** | Read-only content in a state. The agent sends `GET <uri>`; the server runs the **handler** for that state and path and returns the content (e.g. text, JSON). |

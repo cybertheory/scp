@@ -1,4 +1,4 @@
-"""Tests for SCP Python SDK: FSM, State Frame, client-server exchange, visualizer."""
+"""Tests for ASMP Python SDK: FSM, State Frame, client-server exchange, visualizer."""
 import pytest
 import subprocess
 import sys
@@ -7,10 +7,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "sdks" / "python"))
 
-from scp.models import StateFrame, NextState, TransitionDef
-from scp.visualize import visualize_fsm
-from scp.server import SCPWorkflow, create_app
-from scp.client import SCPClient
+from asmp.models import StateFrame, NextState, TransitionDef
+from asmp.visualize import visualize_fsm
+from asmp.server import ASMPWorkflow, create_app
+from asmp.client import ASMPClient
 from fastapi.testclient import TestClient
 
 try:
@@ -33,7 +33,7 @@ def test_workflow_build_frame():
     transitions = [
         TransitionDef(from_state="INIT", action="start", to_state="NEXT"),
     ]
-    w = SCPWorkflow("wf1", "INIT", transitions, base_url="http://localhost:8000")
+    w = ASMPWorkflow("wf1", "INIT", transitions, base_url="http://localhost:8000")
     w.hint("INIT", "Start here.")
     frame = w.build_frame("run-123", "INIT")
     assert frame.run_id == "run-123"
@@ -49,7 +49,7 @@ def test_workflow_get_transition():
         TransitionDef(from_state="A", action="x", to_state="B"),
         TransitionDef(from_state="A", action="y", to_state="C"),
     ]
-    w = SCPWorkflow("wf1", "A", transitions)
+    w = ASMPWorkflow("wf1", "A", transitions)
     assert w.get_transition("A", "x").to_state == "B"
     assert w.get_transition("A", "y").to_state == "C"
     assert w.get_transition("A", "z") is None
@@ -93,7 +93,7 @@ def app_and_client():
     transitions = [
         TransitionDef(from_state="INIT", action="start", to_state="DONE"),
     ]
-    w = SCPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
+    w = ASMPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
     store = {}
     app = create_app(w, store=store)
     client = TestClient(app)
@@ -192,7 +192,7 @@ def test_get_cli_with_hook_returns_custom_prompt_hint_labels():
         TransitionDef(from_state="INIT", action="skip", to_state="DONE"),
     ]
     w = (
-        SCPWorkflow("wf-cli", "INIT", transitions, base_url="http://localhost:8000")
+        ASMPWorkflow("wf-cli", "INIT", transitions, base_url="http://localhost:8000")
         .hint("INIT", "Start or skip.")
         .hint("DONE", "Done")
         .cli(
@@ -229,7 +229,7 @@ def test_transition_missing_expects(app_and_client):
     transitions = [
         TransitionDef(from_state="INIT", action="submit", to_state="DONE", expects={"name": "string"}),
     ]
-    w = SCPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
+    w = ASMPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
     app = create_app(w, store={})
     client = TestClient(app)
     r = client.post("/runs", json={})
@@ -245,7 +245,7 @@ def test_transition_merges_only_expects_keys_into_run_data():
     transitions = [
         TransitionDef(from_state="INIT", action="go", to_state="DONE", expects={"a": "string", "n": "number"}),
     ]
-    w = SCPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
+    w = ASMPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
     store = {}
     app = create_app(w, store=store)
     client = TestClient(app)
@@ -270,7 +270,7 @@ def test_discovery_returns_all_next_states():
         TransitionDef(from_state="INIT", action="start", to_state="DONE"),
         TransitionDef(from_state="INIT", action="skip", to_state="DONE"),
     ]
-    w = SCPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
+    w = ASMPWorkflow("test-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
     app = create_app(w, store={})
     client = TestClient(app)
     r = client.get("/")
@@ -297,7 +297,7 @@ def test_openapi_json(app_and_client):
     assert r.status_code == 200
     data = r.json()
     assert data.get("openapi") == "3.0.3"
-    assert "Structured Command Protocol" in data.get("info", {}).get("title", "")
+    assert "Agent State Machine Protocol" in data.get("info", {}).get("title", "")
     assert data.get("info", {}).get("x-workflow-id") == w.workflow_id
     assert "/runs" in data.get("paths", {})
     assert "StateFrame" in data.get("components", {}).get("schemas", {})
@@ -324,7 +324,7 @@ def app_with_stage_integrations():
         return {"summary": "Lint report", "data": run_record.get("data", {})}
 
     w = (
-        SCPWorkflow("stage-wf", "INIT", transitions, base_url="http://test")
+        ASMPWorkflow("stage-wf", "INIT", transitions, base_url="http://test")
         .hint("INIT", "Start")
         .hint("LINT", "Run linter or read report, then lint_done")
         .hint("DONE", "Done")
@@ -347,7 +347,7 @@ def test_build_frame_includes_tools_and_resources_only_in_that_state():
         return ""
 
     w = (
-        SCPWorkflow("wf", "A", transitions, base_url="http://test")
+        ASMPWorkflow("wf", "A", transitions, base_url="http://test")
         .tool("A", "my_tool", noop_tool, description="A tool")
         .resource("A", "my_res", noop_res, name="My resource")
     )
@@ -484,7 +484,7 @@ def test_resource_handler_returns_string():
         return "# Report\nHello"
 
     w = (
-        SCPWorkflow("wf2", "INIT", [TransitionDef(from_state="INIT", action="go", to_state="X")], base_url="http://test")
+        ASMPWorkflow("wf2", "INIT", [TransitionDef(from_state="INIT", action="go", to_state="X")], base_url="http://test")
         .resource("X", "report", text_resource, mime_type="text/markdown")
     )
     store = {}
@@ -499,9 +499,9 @@ def test_resource_handler_returns_string():
     assert res.headers.get("content-type", "").startswith("text/markdown")
 
 
-# --- SCPClient: parse frame ---
+# --- ASMPClient: parse frame ---
 class _TestClientAdapter:
-    """Sync adapter so SCPClient can use FastAPI TestClient (ASGITransport is async-only in newer httpx)."""
+    """Sync adapter so ASMPClient can use FastAPI TestClient (ASGITransport is async-only in newer httpx)."""
     def __init__(self, tc: TestClient, base_url: str = "http://testserver"):
         self._tc = tc
         self.base_url = base_url
@@ -523,15 +523,15 @@ class _TestClientAdapter:
 
 
 @pytest.mark.skipif(not HAS_ASGI_TRANSPORT, reason="httpx ASGITransport not available")
-def test_scp_client_cli_mode_get_cli_and_step_to_end():
-    """Client CLI mode: SCPClient get_frame, get_cli, transition, get_cli; step through to DONE."""
+def test_asmp_client_cli_mode_get_cli_and_step_to_end():
+    """Client CLI mode: ASMPClient get_frame, get_cli, transition, get_cli; step through to DONE."""
     transitions = [TransitionDef(from_state="INIT", action="start", to_state="DONE")]
-    w = SCPWorkflow("test-wf", "INIT", transitions, base_url="http://testserver").hint("INIT", "Start").hint("DONE", "Done")
+    w = ASMPWorkflow("test-wf", "INIT", transitions, base_url="http://testserver").hint("INIT", "Start").hint("DONE", "Done")
     store = {}
     app = create_app(w, store=store)
     test_client = TestClient(app)
     adapter = _TestClientAdapter(test_client, base_url="http://testserver")
-    client = SCPClient("http://testserver", client=adapter)
+    client = ASMPClient("http://testserver", client=adapter)
     try:
         frame0 = client.start_run()
         assert frame0.state == "INIT"
@@ -546,8 +546,8 @@ def test_scp_client_cli_mode_get_cli_and_step_to_end():
         adapter.close()
 
 
-def test_scp_client_parse_frame():
-    """SCPClient can parse a State Frame from JSON."""
+def test_asmp_client_parse_frame():
+    """ASMPClient can parse a State Frame from JSON."""
     frame_json = {
         "run_id": "run-x",
         "workflow_id": "w",
@@ -556,7 +556,7 @@ def test_scp_client_parse_frame():
         "hint": "Go",
         "next_states": [{"action": "a", "method": "POST", "href": "http://localhost/runs/run-x/transitions/a"}],
     }
-    client = SCPClient("http://localhost:8000")
+    client = ASMPClient("http://localhost:8000")
     frame = client._parse_frame(frame_json)
     assert frame.run_id == "run-x"
     assert frame.state == "S"

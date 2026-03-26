@@ -7,36 +7,36 @@
  * **Migration:** `localBackends` and `addLocal()` are deprecated in favor of `localFsms` and `addLocalFsm()`.
  * They remain supported for backward compatibility and will be removed in the next major (v2.0.0).
  */
-import type { SCPClientConfig, SCPServerEntry } from "./config.js";
-import { parseSCPClientConfig } from "./config.js";
-import type { SCPBackend } from "./local.js";
-import { HttpSCPBackend } from "./backend-http.js";
-import { SCPClient } from "./client.js";
+import type { ASMPClientConfig, ASMPServerEntry } from "./config.js";
+import { parseASMPClientConfig } from "./config.js";
+import type { ASMPBackend } from "./local.js";
+import { HttpASMPBackend } from "./backend-http.js";
+import { ASMPClient } from "./client.js";
 
 export type ServerInfo = {
   id: string;
-  /** "http" = SCP server (remote or localhost). "embedded" = in-memory FSM, no server. */
+  /** "http" = ASMP server (remote or localhost). "embedded" = in-memory FSM, no server. */
   type: "http" | "embedded";
   base_url?: string;
 };
 
 /**
- * Registry of SCP clients: from config (servers list), programmatic local FSMs (in-memory),
- * and dynamically added servers. Use getClient(id) to get an SCPClient and run through a FSM.
+ * Registry of ASMP clients: from config (servers list), programmatic local FSMs (in-memory),
+ * and dynamically added servers. Use getClient(id) to get an ASMPClient and run through a FSM.
  */
-export class SCPClientRegistry {
-  private clients = new Map<string, SCPClient>();
+export class ASMPClientRegistry {
+  private clients = new Map<string, ASMPClient>();
   private serverInfo = new Map<string, ServerInfo>();
   private timeout: number;
 
   constructor(
     options: {
       /** Initial config (JSON object or string). Servers become HTTP clients (remote or localhost). */
-      config?: SCPClientConfig | string;
+      config?: ASMPClientConfig | string;
       /** In-memory FSMs only (no server). Keyed by id. Not definable in JSON config. */
-      localFsms?: Record<string, SCPBackend>;
+      localFsms?: Record<string, ASMPBackend>;
       /** @deprecated Use localFsms. In-memory FSMs (no server). Will be removed in v2.0.0. */
-      localBackends?: Record<string, SCPBackend>;
+      localBackends?: Record<string, ASMPBackend>;
       timeout?: number;
     } = {}
   ) {
@@ -45,7 +45,7 @@ export class SCPClientRegistry {
     if (options.config != null) {
       const config =
         typeof options.config === "string"
-          ? parseSCPClientConfig(options.config)
+          ? parseASMPClientConfig(options.config)
           : options.config;
       this.addConfig(config);
     }
@@ -59,9 +59,9 @@ export class SCPClientRegistry {
   }
 
   /** Load servers from a discovery config (e.g. from file or agent context). */
-  addConfig(config: SCPClientConfig | string): void {
+  addConfig(config: ASMPClientConfig | string): void {
     const parsed =
-      typeof config === "string" ? parseSCPClientConfig(config) : config;
+      typeof config === "string" ? parseASMPClientConfig(config) : config;
     if (!parsed.servers) return;
     for (const entry of parsed.servers) {
       const id = entry.id ?? entry.base_url;
@@ -70,12 +70,12 @@ export class SCPClientRegistry {
   }
 
   /**
-   * Dynamically add an SCP server by URL (remote or local—e.g. http://localhost:3000).
+   * Dynamically add an ASMP server by URL (remote or local—e.g. http://localhost:3000).
    * Use for URLs from a skill, agent context, or an external CLI that started a server.
    */
   addServer(id: string, baseUrl: string): void {
-    const backend = new HttpSCPBackend(baseUrl, this.timeout);
-    this.clients.set(id, new SCPClient(backend));
+    const backend = new HttpASMPBackend(baseUrl, this.timeout);
+    this.clients.set(id, new ASMPClient(backend));
     this.serverInfo.set(id, { id, type: "http", base_url: baseUrl });
   }
 
@@ -83,25 +83,25 @@ export class SCPClientRegistry {
    * Add an in-memory FSM (no server). Must be supplied programmatically; not definable in JSON config.
    * The client interacts with the workflow and store directly—no HTTP.
    */
-  addLocalFsm(id: string, backend: SCPBackend): void {
-    this.clients.set(id, new SCPClient(backend));
+  addLocalFsm(id: string, backend: ASMPBackend): void {
+    this.clients.set(id, new ASMPClient(backend));
     this.serverInfo.set(id, { id, type: "embedded" });
   }
 
   /** @deprecated Use addLocalFsm. Add an in-memory FSM (no server). Will be removed in v2.0.0. */
-  addLocal(id: string, backend: SCPBackend): void {
+  addLocal(id: string, backend: ASMPBackend): void {
     this.addLocalFsm(id, backend);
   }
 
-  /** Get an SCPClient for the given server or local FSM id. Returns null if not found. */
-  getClient(id: string): SCPClient | null {
+  /** Get an ASMPClient for the given server or local FSM id. Returns null if not found. */
+  getClient(id: string): ASMPClient | null {
     return this.clients.get(id) ?? null;
   }
 
   /** Require a client; throws if id is not registered. */
-  requireClient(id: string): SCPClient {
+  requireClient(id: string): ASMPClient {
     const c = this.clients.get(id);
-    if (!c) throw new Error(`SCP client '${id}' not found. Known: ${this.listServerIds().join(", ") || "(none)"}`);
+    if (!c) throw new Error(`ASMP client '${id}' not found. Known: ${this.listServerIds().join(", ") || "(none)"}`);
     return c;
   }
 

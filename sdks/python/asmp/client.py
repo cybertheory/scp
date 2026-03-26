@@ -1,4 +1,4 @@
-"""SCP client: fetch frames, trigger transitions, consume NDJSON stream, and OpenAI tool-calling."""
+"""ASMP client: fetch frames, trigger transitions, consume NDJSON stream, and OpenAI tool-calling."""
 from __future__ import annotations
 
 import json
@@ -8,8 +8,8 @@ from typing import Any, Iterator, Optional
 from .models import StateFrame
 
 
-class SCPClient:
-    """HTTP client for SCP. Uses a shared connection by default for efficiency."""
+class ASMPClient:
+    """HTTP client for ASMP. Uses a shared connection by default for efficiency."""
 
     def __init__(self, base_url: str, timeout: float = 30.0, client: Optional[httpx.Client] = None):
         self.base_url = base_url.rstrip("/")
@@ -24,7 +24,7 @@ class SCPClient:
         """Close the underlying HTTP client. Call when done to free connections."""
         self._client.close()
 
-    def __enter__(self) -> "SCPClient":
+    def __enter__(self) -> "ASMPClient":
         return self
 
     def __exit__(self, *args: Any) -> None:

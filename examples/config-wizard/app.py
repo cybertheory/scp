@@ -1,5 +1,5 @@
 """
-Config Wizard - SCP example using optional CLI hooks (.cli()).
+Config Wizard - ASMP example using optional CLI hooks (.cli()).
 
 Demonstrates the optional CLI config: workflow.cli(state, prompt=..., hint=..., options=[...])
 so that GET /runs/{run_id}/cli returns custom labels and prompts instead of auto-generated ones.
@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "sdks" / "python"))
 
-from scp import SCPWorkflow, TransitionDef, create_app
+from asmp import ASMPWorkflow, TransitionDef, create_app
 import uvicorn
 
 transitions = [
@@ -25,7 +25,7 @@ transitions = [
 ]
 
 workflow = (
-    SCPWorkflow("config-wizard-v1", "INITIAL", transitions, base_url="http://localhost:8010")
+    ASMPWorkflow("config-wizard-v1", "INITIAL", transitions, base_url="http://localhost:8010")
     .hint("INITIAL", "Start the config wizard.")
     .hint("CONFIGURE", "Enter a value and save.")
     .hint("CONFIRM", "Confirm to apply or cancel.")

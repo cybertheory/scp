@@ -1,6 +1,6 @@
-# Contributing to SCP
+# Contributing to ASMP
 
-Thanks for your interest in the Structured Command Protocol (SCP). This file covers how to run tests, keep the spec in sync, and where to look for project conventions.
+Thanks for your interest in the Agent State Machine Protocol (ASMP). This file covers how to run tests, keep the spec in sync, and where to look for project conventions.
 
 ---
 
@@ -15,11 +15,11 @@ Thanks for your interest in the Structured Command Protocol (SCP). This file cov
   (TypeScript tests live in `sdks/typescript/tests/`.)
 
 - **Agent integration tests** (optional): Require `OPENAI_API_KEY`.  
-  - Python: `OPENAI_API_KEY=sk-... pytest tests/python/test_agent_scp.py -v`  
+  - Python: `OPENAI_API_KEY=sk-... pytest tests/python/test_agent_asmp.py -v`  
   - TypeScript: `OPENAI_API_KEY=sk-... npm test` (in `sdks/typescript`; agent tests are skipped if the key is missing).
 
 - **Redis stream integration tests** (optional): Use a real Redis connection; skipped if Redis is not installed or not reachable.  
-  - Python: `pip install scp-sdk[redis]`, start Redis (e.g. `redis-server`), then `pytest tests/python/test_redis_stream.py -v`. Override with `REDIS_URL`.  
+  - Python: `pip install asmp-sdk[redis]`, start Redis (e.g. `redis-server`), then `pytest tests/python/test_redis_stream.py -v`. Override with `REDIS_URL`.  
   - TypeScript: Install Redis, then `npm test` in `sdks/typescript`; the Redis test is skipped if `ioredis` or Redis is unavailable. Set `REDIS_URL` to override (default `redis://localhost:6379`).
 
 - **Redis + Docker tests** (optional): Start the official Redis Docker image, run the stream integration against it, and confirm in Redis (PING, set/get key, publish to the run channel). Requires Docker and the `redis:7` image.  
@@ -34,7 +34,7 @@ The canonical API spec is **`spec/openapi.json`**. When you change the API:
 
 1. Update **`spec/openapi.json`** first.
 2. Sync the Python copy:  
-   `cp spec/openapi.json sdks/python/scp/openapi.json`
+   `cp spec/openapi.json sdks/python/asmp/openapi.json`
 3. Update the TypeScript server’s **`sdks/typescript/src/openapi-spec.ts`** so `GET /openapi.json` matches.
 
 Then run **`python scripts/check_openapi_sync.py`** from the repo root to verify the Python copy matches the spec. Use this script in CI to enforce sync.

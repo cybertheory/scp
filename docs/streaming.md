@@ -45,20 +45,20 @@ Both SDKs support **Redis streaming by URL**: you supply a Redis URL and the ser
 Install the Redis extra, then pass **`redis_url`** to `create_app`:
 
 ```bash
-pip install scp-sdk[redis]
+pip install asmp-sdk[redis]
 ```
 
 ```python
-from scp import create_app, SCPWorkflow, TransitionDef
+from asmp import create_app, ASMPWorkflow, TransitionDef
 
 transitions = [TransitionDef(from_state="INIT", action="start", to_state="DONE")]
-workflow = SCPWorkflow("my-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
+workflow = ASMPWorkflow("my-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done")
 
 # In-memory store; stream updates go through Redis
 app = create_app(workflow, store={}, redis_url="redis://localhost:6379")
 ```
 
-- Every `store.set` (transitions, tool results, etc.) publishes a State Frame to the channel `scp:stream:{run_id}`.
+- Every `store.set` (transitions, tool results, etc.) publishes a State Frame to the channel `asmp:stream:{run_id}`.
 - `GET /runs/{run_id}/stream` sends the current frame once, then subscribes to that channel and streams each published frame as NDJSON.
 
 ### TypeScript
@@ -66,13 +66,13 @@ app = create_app(workflow, store={}, redis_url="redis://localhost:6379")
 Install the optional dependency, then pass **`redisUrl`** in the options:
 
 ```bash
-npm install ioredis   # or it is installed as optionalDependency with scp-sdk
+npm install ioredis   # or it is installed as optionalDependency with asmp-sdk
 ```
 
 ```typescript
-import { createApp, SCPWorkflow } from "scp-sdk";
+import { createApp, ASMPWorkflow } from "asmp-sdk";
 
-const workflow = new SCPWorkflow("my-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done");
+const workflow = new ASMPWorkflow("my-wf", "INIT", transitions).hint("INIT", "Start").hint("DONE", "Done");
 const app = createApp(workflow, {}, { redisUrl: "redis://localhost:6379" });
 ```
 
@@ -82,7 +82,7 @@ For the fetch handler (Workers, Supabase, Convex):
 const handle = createFetchHandler(workflow, {}, { redisUrl: "redis://localhost:6379" });
 ```
 
-Same behavior: every store update is published to `scp:stream:{run_id}`, and `GET /stream` subscribes and streams.
+Same behavior: every store update is published to `asmp:stream:{run_id}`, and `GET /stream` subscribes and streams.
 
 ---
 

@@ -1,17 +1,17 @@
-# Dynamic remote CLI (SCP)
+# Dynamic remote CLI (ASMP)
 
-SCP supports a **remote dynamic CLI** feature: the server exposes CLI metadata at a fixed path so any client (including CLRUN) can drive the workflow as an interactive CLI without embedding that metadata in every State Frame.
+ASMP supports a **remote dynamic CLI** feature: the server exposes CLI metadata at a fixed path so any client (including CLRUN) can drive the workflow as an interactive CLI without embedding that metadata in every State Frame.
 
 ## Overview
 
 - **CLI metadata is not in the State Frame.** State Frame responses (GET /runs/{run_id}, transition responses) do not include a `cli` field. This keeps payloads small for agents that do not need a TUI.
-- **Standardized path:** **`GET /runs/{run_id}/cli`** (or **`GET /runs/{run_id}/cli.json`**). Every SCP server implements this endpoint and always returns a valid CLI object for a valid run—either from workflow **hooks** or **auto-generated** from the frame’s hint and next_states.
+- **Standardized path:** **`GET /runs/{run_id}/cli`** (or **`GET /runs/{run_id}/cli.json`**). Every ASMP server implements this endpoint and always returns a valid CLI object for a valid run—either from workflow **hooks** or **auto-generated** from the frame’s hint and next_states.
 - **Canonical format:** The CLI response is **JSON only**, **snake_case** (e.g. `input_hint`, `next_states`). All clients and tools (including CLRUN Node and Python) MUST use the same structure. See [spec/CLI_SCHEMA.json](../spec/CLI_SCHEMA.json).
 
 ## When to use it
 
 - **CLI mode:** After every **getFrame()** and after every **transition()**, the client fetches **GET /runs/{run_id}/cli** and uses the response to update the interface (prompt, hint, options list).
-- **Tools like CLRUN:** CLRUN supports **dynamic remote CLIs via SCP**. Run `clrun scp <base_url>` to attach to an SCP server; CLRUN then fetches the CLI endpoint after each state update and renders the flow in its virtual terminal.
+- **Tools like CLRUN:** CLRUN supports **dynamic remote CLIs via ASMP**. Run `clrun asmp <base_url>` to attach to an ASMP server; CLRUN then fetches the CLI endpoint after each state update and renders the flow in its virtual terminal.
 
 ## CLI object shape
 

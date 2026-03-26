@@ -1,4 +1,4 @@
-"""SCP server: FastAPI app factory and workflow runner with FSM, guards, and NDJSON stream."""
+"""ASMP server: FastAPI app factory and workflow runner with FSM, guards, and NDJSON stream."""
 from __future__ import annotations
 
 import json
@@ -16,19 +16,19 @@ from .visualize import visualize_fsm
 from .store import Store, InMemoryStore, RunRecord
 
 
-REDIS_STREAM_CHANNEL_PREFIX = "scp:stream:"
+REDIS_STREAM_CHANNEL_PREFIX = "asmp:stream:"
 
 
 def _ndjson_line(obj: dict) -> bytes:
     return (json.dumps(obj) + "\n").encode("utf-8")
 
 
-def _redis_stream_store(inner: Store, redis_url: str, workflow: "SCPWorkflow") -> Store:
+def _redis_stream_store(inner: Store, redis_url: str, workflow: "ASMPWorkflow") -> Store:
     """Wrap a store to publish State Frames to Redis on every set(), for GET /stream subscribers."""
     try:
         import redis
     except ImportError:
-        raise ImportError("Redis streaming requires the 'redis' package. pip install scp-sdk[redis] or pip install redis")
+        raise ImportError("Redis streaming requires the 'redis' package. pip install asmp-sdk[redis] or pip install redis")
     client = redis.from_url(redis_url, decode_responses=False)
 
     class _Wrapper(Store):
@@ -50,13 +50,13 @@ def _redis_stream_store(inner: Store, redis_url: str, workflow: "SCPWorkflow") -
 
 
 async def _redis_stream_provider(
-    run_id: str, last_event_id: str, get_run: Callable[[str], RunRecord], workflow: "SCPWorkflow", redis_url: str
+    run_id: str, last_event_id: str, get_run: Callable[[str], RunRecord], workflow: "ASMPWorkflow", redis_url: str
 ) -> AsyncIterator[dict]:
     """Async generator: yield current frame, then yield each message from Redis pub/sub for this run."""
     try:
         from redis.asyncio import Redis
     except ImportError:
-        raise ImportError("Redis streaming requires the 'redis' package. pip install scp-sdk[redis] or pip install redis")
+        raise ImportError("Redis streaming requires the 'redis' package. pip install asmp-sdk[redis] or pip install redis")
     r = get_run(run_id)
     frame = workflow.build_frame(
         run_id, r["state"], data=r.get("data"), milestones=r.get("milestones")
@@ -79,7 +79,7 @@ async def _redis_stream_provider(
         await redis_client.aclose()
 
 
-class SCPWorkflow:
+class ASMPWorkflow:
     """Defines a workflow FSM and produces State Frames."""
 
     def __init__(
@@ -102,16 +102,16 @@ class SCPWorkflow:
         self._state_resources: dict[str, dict[str, dict[str, Any]]] = {}  # state -> path -> {handler, name?, mime_type?}
         self._state_cli: dict[str, StateFrameCli] = {}
 
-    def hint(self, state: str, text: str) -> "SCPWorkflow":
+    def hint(self, state: str, text: str) -> "ASMPWorkflow":
         self._state_hints[state] = text
         return self
 
-    def skill(self, state: str, name: str, path: str, context_summary: Optional[str] = None) -> "SCPWorkflow":
+    def skill(self, state: str, name: str, path: str, context_summary: Optional[str] = None) -> "ASMPWorkflow":
         url = f"{self.skill_base_url.rstrip('/')}/skills/{path}"
         self._state_skills[state] = ActiveSkill(name=name, url=url, context_summary=context_summary)
         return self
 
-    def status_default(self, state: str, status: str) -> "SCPWorkflow":
+    def status_default(self, state: str, status: str) -> "ASMPWorkflow":
         self._state_status[state] = status
         return self
 
@@ -122,7 +122,7 @@ class SCPWorkflow:
         handler: Callable[..., Any],
         description: Optional[str] = None,
         expects: Optional[dict[str, str]] = None,
-    ) -> "SCPWorkflow":
+    ) -> "ASMPWorkflow":
         """Register a stage-bound tool. Handler(run_id, run_record, body) -> dict."""
         self._state_tools.setdefault(state, {})[name] = {
             "handler": handler,
@@ -138,7 +138,7 @@ class SCPWorkflow:
         handler: Callable[..., Any],
         name: Optional[str] = None,
         mime_type: Optional[str] = None,
-    ) -> "SCPWorkflow":
+    ) -> "ASMPWorkflow":
         """Register a stage-bound resource. Handler(run_id, run_record) -> bytes | str | dict."""
         self._state_resources.setdefault(state, {})[path] = {
             "handler": handler,
@@ -154,7 +154,7 @@ class SCPWorkflow:
         hint: Optional[str] = None,
         options: Optional[list[dict[str, Any]]] = None,
         input_hint: Optional[str] = None,
-    ) -> "SCPWorkflow":
+    ) -> "ASMPWorkflow":
         """Register optional CLI representation for a state (hook). When not set, GET /runs/{run_id}/cli auto-generates from hint and next_states."""
         opts: Optional[list[CliOption]] = None
         if options is not None:
@@ -287,22 +287,22 @@ class SCPWorkflow:
 
 
 def create_app(
-    workflow: SCPWorkflow,
+    workflow: ASMPWorkflow,
     store: Optional[Union[Store, dict[str, Any]]] = None,
     stream_callback: Optional[Callable[[str, StateFrame], None]] = None,
     stream_provider: Optional[Callable[[str, str], AsyncIterator[dict]]] = None,
     redis_url: Optional[str] = None,
 ) -> FastAPI:
-    """Create FastAPI app with SCP routes.
+    """Create FastAPI app with ASMP routes.
 
     - store: Store implementation, dict (in-memory), or None.
     - stream_callback: Called when a 202 NDJSON response is sent after a transition.
     - stream_provider: Optional async generator (run_id, last_event_id) -> yields frame dicts for GET /runs/{run_id}/stream.
       If None (and redis_url is not set), the default dev implementation is used (simple polling loop).
     - redis_url: If set, enables first-class Redis streaming: every store update is published to Redis, and GET /stream
-      subscribes to the run's channel. Requires: pip install scp-sdk[redis]
+      subscribes to the run's channel. Requires: pip install asmp-sdk[redis]
     """
-    app = FastAPI(title="SCP Server", version="0.1.0")
+    app = FastAPI(title="ASMP Server", version="0.1.0")
     if store is None:
         _store: Store = InMemoryStore()
     elif isinstance(store, dict):
@@ -325,10 +325,10 @@ def create_app(
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
     # Load OpenAPI spec and set server URL to workflow base_url; override FastAPI's default schema
-    _openapi_path = _pkg_files(__package__ or "scp") / "openapi.json"
+    _openapi_path = _pkg_files(__package__ or "asmp") / "openapi.json"
     if _openapi_path.exists():
         _openapi_spec = json.loads(_openapi_path.read_text())
-        _openapi_spec["servers"] = [{"url": workflow.base_url, "description": "SCP server"}]
+        _openapi_spec["servers"] = [{"url": workflow.base_url, "description": "ASMP server"}]
         _openapi_spec["info"]["x-workflow-id"] = workflow.workflow_id
 
         def _custom_openapi():
@@ -570,7 +570,7 @@ def create_app(
             current_state=current,
         )
         html = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>SCP FSM - {workflow.workflow_id}</title>
+<html><head><meta charset="utf-8"><title>ASMP FSM - {workflow.workflow_id}</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script></head>
 <body><pre class="mermaid">{mermaid}</pre>
 <script>mermaid.initialize({{ startOnLoad: true }});</script></body></html>"""

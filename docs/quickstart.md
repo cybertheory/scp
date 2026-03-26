@@ -1,6 +1,6 @@
 # Quickstart
 
-Get an SCP server and client running in a few minutes.
+Get an ASMP server and client running in a few minutes.
 
 ---
 
@@ -15,13 +15,13 @@ cd sdks/python && pip install -e . && pip install uvicorn
 ### Define workflow and run server
 
 ```python
-from scp import SCPWorkflow, TransitionDef, create_app
+from asmp import ASMPWorkflow, TransitionDef, create_app
 
 transitions = [
     TransitionDef(from_state="INIT", action="start", to_state="DONE"),
 ]
 workflow = (
-    SCPWorkflow("my-wf", "INIT", transitions, base_url="http://localhost:8000")
+    ASMPWorkflow("my-wf", "INIT", transitions, base_url="http://localhost:8000")
     .hint("INIT", "Start here.")
     .hint("DONE", "Done.")
 )
@@ -48,11 +48,11 @@ cd sdks/typescript && npm install && npm run build
 ### Define workflow and run server
 
 ```typescript
-import { createApp, SCPWorkflow } from "scp-sdk";  // or from "./src/index.js"
+import { createApp, ASMPWorkflow } from "asmp-sdk";  // or from "./src/index.js"
 import { serve } from "@hono/node-server";
 
 const transitions = [{ from_state: "INIT", action: "start", to_state: "DONE" }];
-const workflow = new SCPWorkflow("my-wf", "INIT", transitions, "http://localhost:3000")
+const workflow = new ASMPWorkflow("my-wf", "INIT", transitions, "http://localhost:3000")
   .hint("INIT", "Start here.")
   .hint("DONE", "Done.");
 

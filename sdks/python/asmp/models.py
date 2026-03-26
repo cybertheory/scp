@@ -1,4 +1,4 @@
-"""Pydantic models for SCP State Frame and related types."""
+"""Pydantic models for ASMP State Frame and related types."""
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -54,7 +54,7 @@ class StateFrameCli(BaseModel):
 
 
 class StateFrame(BaseModel):
-    """SCP State Frame - single source of truth for the agent."""
+    """ASMP State Frame - single source of truth for the agent."""
     run_id: str
     workflow_id: str
     state: str

@@ -8,9 +8,9 @@ Servers can be defined in a **JSON config** (from file or agent context), and th
 
 | | **Server (HTTP)** | **Local FSM (embedded)** |
 |--|-------------------|---------------------------|
-| **What** | SCP server at a URL (remote or `http://localhost:PORT`) | In-memory workflow + store; no server process |
+| **What** | ASMP server at a URL (remote or `http://localhost:PORT`) | In-memory workflow + store; no server process |
 | **In JSON config?** | Yes: `servers[].base_url` | No—programmatic only |
-| **Add at runtime** | `registry.addServer(id, baseUrl)` | `registry.addLocalFsm(id, LocalSCPBackend(...))` |
+| **Add at runtime** | `registry.addServer(id, baseUrl)` | `registry.addLocalFsm(id, LocalASMPBackend(...))` |
 | **`listServers()[].type`** | `"http"` | `"embedded"` |
 
 A **local server** (e.g. Node process on localhost) is just a server: add it with `addServer("ci-cd", "http://localhost:3000")`. It appears as type `"http"`. Only in-memory FSMs (no HTTP) are type `"embedded"`.
@@ -35,19 +35,19 @@ Schema: **[spec/CLIENT_CONFIG.json](../spec/CLIENT_CONFIG.json)**.
 
 ---
 
-## SCPClientRegistry (TypeScript)
+## ASMPClientRegistry (TypeScript)
 
 A registry holds multiple clients (servers and embedded FSMs) and lets you get a client by id.
 
 ### From config + optional local FSMs
 
 ```typescript
-import { SCPClientRegistry, LocalSCPBackend, SCPWorkflow } from "scp-sdk";
+import { ASMPClientRegistry, LocalASMPBackend, ASMPWorkflow } from "asmp-sdk";
 
-const registry = new SCPClientRegistry({
+const registry = new ASMPClientRegistry({
   config: jsonStringOrObject,   // from file or agent context
   localFsms: {
-    myFsm: new LocalSCPBackend(workflow, {}),
+    myFsm: new LocalASMPBackend(workflow, {}),
   },
   timeout: 30_000,
 });
@@ -78,7 +78,7 @@ if (client) {
 **Dynamic server add** — Start with an empty registry or existing config, then add a server URL at runtime (e.g. from a skill, CLI, or agent prompt). The new client connects to that URL for all operations:
 
 ```typescript
-const registry = new SCPClientRegistry({});  // or existing config
+const registry = new ASMPClientRegistry({});  // or existing config
 registry.addServer("cli-run", "http://localhost:4000");
 const client = registry.requireClient("cli-run");
 const frame = await client.startRun();
@@ -88,25 +88,25 @@ await client.transition("start", undefined, frame.run_id);
 **Config from string** — Load discovery config from a JSON string (file, env, or agent context). Then optionally add more servers with `addServer()`:
 
 ```typescript
-const configFromFile = fs.readFileSync("scp.json", "utf-8");
-const registry = new SCPClientRegistry({ config: configFromFile });
+const configFromFile = fs.readFileSync("asmp.json", "utf-8");
+const registry = new ASMPClientRegistry({ config: configFromFile });
 // Or merge later:
-registry.addConfig(parseSCPClientConfig(anotherJsonString));
+registry.addConfig(parseASMPClientConfig(anotherJsonString));
 registry.addServer("from-skill", urlFromSkillOrPrompt);
 ```
 
 ### Add embedded FSM at runtime
 
 ```typescript
-registry.addLocalFsm("helper", new LocalSCPBackend(helperWorkflow, {}));
+registry.addLocalFsm("helper", new LocalASMPBackend(helperWorkflow, {}));
 ```
 
 ### Parse config only
 
 ```typescript
-import { parseSCPClientConfig } from "scp-sdk";
+import { parseASMPClientConfig } from "asmp-sdk";
 
-const config = parseSCPClientConfig(fs.readFileSync("scp.json", "utf-8"));
+const config = parseASMPClientConfig(fs.readFileSync("asmp.json", "utf-8"));
 // Validates shape; throws if invalid.
 ```
 

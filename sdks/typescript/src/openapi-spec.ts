@@ -1,13 +1,13 @@
-/** Base OpenAPI 3.0 spec for SCP. Single source: spec/openapi.json */
+/** Base OpenAPI 3.0 spec for ASMP. Single source: spec/openapi.json */
 export const openapiBase = {
   openapi: "3.0.3",
   info: {
-    title: "Structured Command Protocol (SCP)",
+    title: "Agent State Machine Protocol (ASMP)",
     description:
-      "SCP exposes workflow state as State Frames. Each response is a State Frame: current state, hint, and valid next_states (transitions). Agents POST to transition hrefs to advance the run.",
+      "ASMP exposes workflow state as State Frames. Each response is a State Frame: current state, hint, and valid next_states (transitions). Agents POST to transition hrefs to advance the run.",
     version: "1.0.0",
   },
-  servers: [{ url: "http://localhost:3000", description: "SCP server" }],
+  servers: [{ url: "http://localhost:3000", description: "ASMP server" }],
   paths: {
     "/": {
       get: {
@@ -59,7 +59,7 @@ export const openapiBase = {
       get: {
         summary: "Get CLI representation",
         description:
-          "Returns the CLI object for the current state. Always present on SCP servers. Used by clients in CLI mode (e.g. CLRUN) to drive a dynamic remote CLI. Response from workflow hooks or auto-generated from hint and next_states. Canonical JSON, snake_case.",
+          "Returns the CLI object for the current state. Always present on ASMP servers. Used by clients in CLI mode (e.g. CLRUN) to drive a dynamic remote CLI. Response from workflow hooks or auto-generated from hint and next_states. Canonical JSON, snake_case.",
         parameters: [{ name: "run_id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
         responses: {
           "200": { description: "CLI object for current state", content: { "application/json": { schema: { $ref: "#/components/schemas/CliResponse" } } } },

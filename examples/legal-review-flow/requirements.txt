@@ -3,4 +3,4 @@
 # Or: python app.py
 uvicorn[standard]>=0.22
 fastapi>=0.100
-scp-sdk (local: ../../sdks/python)
+asmp-sdk (local: ../../sdks/python)

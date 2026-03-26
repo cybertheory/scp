@@ -1,10 +1,10 @@
 """
-Structured Command Protocol (SCP) - Python SDK.
+Agent State Machine Protocol (ASMP) - Python SDK.
 Lightweight server (FastAPI) and client with LLM context injection and Streamable HTTP.
 """
 __version__ = "0.1.0"
 
-from scp.models import (
+from asmp.models import (
     StateFrame,
     NextState,
     ActiveSkill,
@@ -14,10 +14,10 @@ from scp.models import (
     CliOption,
     StateFrameCli,
 )
-from scp.server import create_app, SCPWorkflow
-from scp.client import SCPClient
-from scp.llm import SCPLLMWrapper
-from scp.visualize import visualize_fsm
+from asmp.server import create_app, ASMPWorkflow
+from asmp.client import ASMPClient
+from asmp.llm import ASMPLLMWrapper
+from asmp.visualize import visualize_fsm
 
 __all__ = [
     "StateFrame",
@@ -29,8 +29,8 @@ __all__ = [
     "CliOption",
     "StateFrameCli",
     "create_app",
-    "SCPWorkflow",
-    "SCPClient",
-    "SCPLLMWrapper",
+    "ASMPWorkflow",
+    "ASMPClient",
+    "ASMPLLMWrapper",
     "visualize_fsm",
 ]

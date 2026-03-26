@@ -19,7 +19,7 @@ export type ResourceHandler = (
   run_record: RunRecord
 ) => Promise<string | Buffer | Record<string, unknown>> | string | Buffer | Record<string, unknown>;
 
-export class SCPWorkflow {
+export class ASMPWorkflow {
   workflow_id: string;
   initial_state: string;
   transitions: TransitionDef[];
@@ -247,7 +247,7 @@ export type CreateAppOptions = {
 };
 
 export function createApp(
-  workflow: SCPWorkflow,
+  workflow: ASMPWorkflow,
   storeLike: StoreLike = {},
   opts?: CreateAppOptions | ((run_id: string, frame: StateFrame) => void)
 ): Hono {
@@ -458,7 +458,7 @@ export function createApp(
       current
     );
     const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>SCP FSM - ${workflow.workflow_id}</title>
+<html><head><meta charset="utf-8"><title>ASMP FSM - ${workflow.workflow_id}</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script></head>
 <body><pre class="mermaid">${mermaid}</pre>
 <script>mermaid.initialize({ startOnLoad: true });</script></body></html>`;
@@ -468,7 +468,7 @@ export function createApp(
   app.get("/openapi.json", (c) => {
     const spec = {
       ...openapiBase,
-      servers: [{ url: workflow.base_url, description: "SCP server" }],
+      servers: [{ url: workflow.base_url, description: "ASMP server" }],
       info: { ...openapiBase.info, "x-workflow-id": workflow.workflow_id },
     };
     return c.json(spec);

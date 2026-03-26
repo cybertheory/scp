@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://scp.dev/schemas/CLI_SCHEMA.json",
-  "title": "SCP CLI Response",
+  "$id": "https://asmp.dev/schemas/CLI_SCHEMA.json",
+  "title": "ASMP CLI Response",
   "description": "CLI representation for the current state of a run. Served at GET /runs/{run_id}/cli. JSON only, snake_case. Clients and tools (e.g. CLRUN) MUST use this structure. Not part of the State Frame.",
   "type": "object",
   "properties": {

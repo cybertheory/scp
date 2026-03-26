@@ -1,10 +1,10 @@
 import type { StateFrame } from "./models.js";
 import { StateFrameSchema } from "./models.js";
 import type { CliResponse } from "./models.js";
-import type { SCPBackend } from "./local.js";
-import { HttpSCPBackend } from "./backend-http.js";
+import type { ASMPBackend } from "./local.js";
+import { HttpASMPBackend } from "./backend-http.js";
 
-/** Map SCP expects type string to OpenAI JSON schema type */
+/** Map ASMP expects type string to OpenAI JSON schema type */
 function openaiType(typ: string): string {
   const t = (typ || "string").toLowerCase();
   if (["number", "int", "integer", "float"].includes(t)) return "number";
@@ -19,18 +19,18 @@ export type OpenAITool = {
 };
 
 /**
- * SCP client: works with a remote server (baseUrl) or a local backend (LocalSCPBackend).
+ * ASMP client: works with a remote server (baseUrl) or a local backend (LocalASMPBackend).
  * Use one or multiple clients in parallel for mixed local + remote capabilities.
  */
-export class SCPClient {
-  private backend: SCPBackend;
+export class ASMPClient {
+  private backend: ASMPBackend;
   private _runId: string | null = null;
 
-  /** Pass a baseUrl (string) for HTTP, or an SCPBackend (e.g. LocalSCPBackend) for local or custom. */
-  constructor(baseUrlOrBackend: string | SCPBackend, timeout = 30_000) {
+  /** Pass a baseUrl (string) for HTTP, or an ASMPBackend (e.g. LocalASMPBackend) for local or custom. */
+  constructor(baseUrlOrBackend: string | ASMPBackend, timeout = 30_000) {
     this.backend =
       typeof baseUrlOrBackend === "string"
-        ? new HttpSCPBackend(baseUrlOrBackend, timeout)
+        ? new HttpASMPBackend(baseUrlOrBackend, timeout)
         : baseUrlOrBackend;
   }
 
